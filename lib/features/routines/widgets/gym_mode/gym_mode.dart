@@ -78,7 +78,7 @@ class _GymModeState extends ConsumerState<GymMode> {
     final notificationService = ref.read(restTimerNotificationServiceProvider);
     await notificationService.init();
     final granted = await notificationService.requestPermission();
-    ref.read(restTimerPermissionGrantedProvider.notifier).state = granted;
+    ref.read(restTimerPermissionGrantedProvider.notifier).set(granted);
 
     final notifier = ref.read(routinesRiverpodProvider.notifier);
     final routineId = widget._args.routineId;

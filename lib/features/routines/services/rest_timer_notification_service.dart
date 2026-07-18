@@ -153,4 +153,12 @@ final restTimerNotificationServiceProvider = Provider<RestTimerNotificationServi
 /// Set once per gym-mode entry after requesting the notification permission,
 /// so GymModeOptions can show a hint if it was denied. Null means "not asked
 /// yet this session".
-final restTimerPermissionGrantedProvider = StateProvider<bool?>((ref) => null);
+class RestTimerPermissionNotifier extends Notifier<bool?> {
+  @override
+  bool? build() => null;
+
+  void set(bool granted) => state = granted;
+}
+
+final restTimerPermissionGrantedProvider =
+    NotifierProvider<RestTimerPermissionNotifier, bool?>(RestTimerPermissionNotifier.new);
