@@ -248,7 +248,7 @@ class StartPage extends ConsumerWidget {
                 subtitle: Text(
                   "You won't be notified when a rest countdown ends unless the "
                   'app is open. Enable notifications for this app in your '
-                  'phone settings to get alerted even when it\'s locked or '
+                  "phone settings to get alerted even when it's locked or "
                   'in the background.',
                   style: TextStyle(color: Theme.of(context).colorScheme.onErrorContainer),
                 ),
