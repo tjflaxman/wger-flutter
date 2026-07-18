@@ -8,6 +8,11 @@
 
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Rest-timer end-of-countdown alert: fires as a scheduled local
+         notification so it reaches the user even if the phone is locked or
+         the app is backgrounded/killed (see RestTimerNotificationService). -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
 
     <queries>
         <intent>

@@ -23,6 +23,7 @@ import 'package:wger/features/exercises/widgets/images.dart';
 import 'package:wger/features/routines/models/day.dart';
 import 'package:wger/features/routines/providers/gym_state.dart';
 import 'package:wger/features/routines/providers/gym_state_notifier.dart';
+import 'package:wger/features/routines/services/rest_timer_notification_service.dart';
 import 'package:wger/features/routines/widgets/gym_mode/navigation.dart';
 import 'package:wger/l10n/generated/app_localizations.dart';
 
@@ -219,6 +220,7 @@ class StartPage extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final dayDataDisplay = ref.watch(gymStateProvider).dayDataDisplay;
+    final notificationsGranted = ref.watch(restTimerPermissionGrantedProvider);
 
     return Column(
       children: [
@@ -227,6 +229,32 @@ class StartPage extends ConsumerWidget {
           _controller,
           showEndWorkoutButton: false,
         ),
+
+        if (notificationsGranted == false)
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            child: Card(
+              color: Theme.of(context).colorScheme.errorContainer,
+              child: ListTile(
+                key: const ValueKey('rest-timer-notifications-denied-hint'),
+                leading: Icon(
+                  Icons.notifications_off,
+                  color: Theme.of(context).colorScheme.onErrorContainer,
+                ),
+                title: Text(
+                  'Rest timer alerts are off',
+                  style: TextStyle(color: Theme.of(context).colorScheme.onErrorContainer),
+                ),
+                subtitle: Text(
+                  "You won't be notified when a rest countdown ends unless the "
+                  'app is open. Enable notifications for this app in your '
+                  'phone settings to get alerted even when it\'s locked or '
+                  'in the background.',
+                  style: TextStyle(color: Theme.of(context).colorScheme.onErrorContainer),
+                ),
+              ),
+            ),
+          ),
 
         Expanded(
           child: ListView(

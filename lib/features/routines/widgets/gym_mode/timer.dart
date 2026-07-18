@@ -22,8 +22,10 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:wger/features/routines/providers/gym_state_notifier.dart';
+import 'package:wger/features/routines/services/rest_timer_notification_service.dart';
 import 'package:wger/features/routines/widgets/gym_mode/navigation.dart';
 import 'package:wger/l10n/generated/app_localizations.dart';
+import 'package:wger/theme/motion.dart';
 import 'package:wger/theme/theme.dart';
 
 class TimerWidget extends StatefulWidget {
@@ -102,24 +104,49 @@ class _TimerCountdownWidgetState extends ConsumerState<TimerCountdownWidget> {
   late DateTime _endTime;
   late Timer _uiTimer;
 
-  bool _hasNotified = false;
+  // Only needs to be unique among notifications scheduled concurrently by
+  // this app, which is at most one rest timer at a time.
+  late final int _notificationId;
+  bool _notificationScheduled = false;
+  bool _hasFiredLocalAlert = false;
 
   @override
   void initState() {
     super.initState();
     _endTime = DateTime.now().add(Duration(seconds: widget._seconds));
+    _notificationId = DateTime.now().millisecondsSinceEpoch.remainder(1 << 31);
 
+    // Drives the once-per-second rebuild; the ring's own motion between
+    // ticks comes from the TweenAnimationBuilder in build() below, not from
+    // a long-running Ticker -- a Ticker spanning the whole countdown would
+    // keep the scheduler "busy" for the rest period's full duration, which
+    // is exactly what widget tests' pumpAndSettle() isn't meant to sit
+    // through.
     _uiTimer = Timer.periodic(const Duration(seconds: 1), (_) {
       // ignore: no-empty-block, avoid-empty-setstate
       if (mounted) {
         setState(() {});
       }
     });
+
+    final gymState = ref.read(gymStateProvider);
+    if (gymState.alertOnCountdownEnd) {
+      _notificationScheduled = true;
+      ref.read(restTimerNotificationServiceProvider).scheduleRestEnd(
+            id: _notificationId,
+            endTime: _endTime,
+          );
+    }
   }
 
   @override
   void dispose() {
     _uiTimer.cancel();
+    // Covers skipping past the rest early: don't let a stale notification
+    // fire for a countdown the user already moved on from.
+    if (_notificationScheduled) {
+      ref.read(restTimerNotificationServiceProvider).cancel(_notificationId);
+    }
     super.dispose();
   }
 
@@ -127,20 +154,20 @@ class _TimerCountdownWidgetState extends ConsumerState<TimerCountdownWidget> {
   Widget build(BuildContext context) {
     final remaining = _endTime.difference(DateTime.now());
     final remainingSeconds = remaining.inSeconds <= 0 ? 0 : remaining.inSeconds;
+    final progress = widget._seconds == 0 ? 1.0 : 1 - (remainingSeconds / widget._seconds);
     final displayTime = DateTime(2000, 1, 1, 0, 0, 0).add(Duration(seconds: remainingSeconds));
     final gymState = ref.watch(gymStateProvider);
 
-    //  When countdown finishes, notify ONCE, and respect settings
-    if (remainingSeconds == 0 && !_hasNotified) {
+    //  When countdown finishes, alert ONCE, and respect settings
+    if (remainingSeconds == 0 && !_hasFiredLocalAlert) {
+      _hasFiredLocalAlert = true;
       if (gymState.alertOnCountdownEnd) {
+        // Immediate tactile feedback while the app is foregrounded; the
+        // notification scheduled in initState (which also carries a channel
+        // sound) is what covers backgrounded/locked devices, which this
+        // alone never could.
         HapticFeedback.mediumImpact();
-
-        // Not that this only works on desktop platforms
-        SystemSound.play(SystemSoundType.alert);
       }
-      setState(() {
-        _hasNotified = true;
-      });
     }
 
     return Column(
@@ -150,15 +177,37 @@ class _TimerCountdownWidgetState extends ConsumerState<TimerCountdownWidget> {
           widget._controller,
         ),
         Expanded(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Text(
-                DateFormat('m:ss').format(displayTime),
-                style: Theme.of(context).textTheme.displayLarge!.copyWith(color: wgerPrimaryColor),
+          child: Center(
+            child: SizedBox(
+              width: 220,
+              height: 220,
+              child: Stack(
+                alignment: Alignment.center,
+                children: [
+                  TweenAnimationBuilder<double>(
+                    tween: Tween<double>(begin: 0, end: progress),
+                    duration: AppMotion.standard,
+                    curve: AppMotion.standardCurve,
+                    builder: (context, value, child) => SizedBox(
+                      width: 220,
+                      height: 220,
+                      child: CircularProgressIndicator(
+                        value: value,
+                        strokeWidth: 10,
+                        backgroundColor: wgerPrimaryColor.withValues(alpha: 0.15),
+                        valueColor: const AlwaysStoppedAnimation<Color>(wgerPrimaryColor),
+                      ),
+                    ),
+                  ),
+                  Text(
+                    DateFormat('m:ss').format(displayTime),
+                    style: Theme.of(context).textTheme.displayLarge!.copyWith(
+                          color: wgerPrimaryColor,
+                        ),
+                  ),
+                ],
               ),
-              const SizedBox(height: 16),
-            ],
+            ),
           ),
         ),
         NavigationFooter(widget._controller),

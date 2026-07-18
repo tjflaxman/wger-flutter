@@ -39,6 +39,7 @@ import 'package:wger/features/routines/providers/routines_repository.dart';
 import 'package:wger/features/routines/providers/workout_logs_repository.dart';
 import 'package:wger/features/routines/providers/workout_session_repository.dart';
 import 'package:wger/features/routines/screens/gym_mode.dart';
+import 'package:wger/features/routines/services/rest_timer_notification_service.dart';
 import 'package:wger/features/routines/screens/routine_screen.dart';
 import 'package:wger/features/routines/widgets/forms/rir.dart';
 import 'package:wger/features/routines/widgets/gym_mode/exercise_overview.dart';
@@ -123,6 +124,12 @@ void main() {
         exerciseRepositoryProvider.overrideWithValue(mockExerciseRepo),
         workoutSessionRepositoryProvider.overrideWithValue(mockSessionRepo),
         workoutLogRepositoryProvider.overrideWithValue(mockLogRepo),
+        // No native plugin channels are available under flutter_test; the
+        // real service would throw MissingPluginException as soon as gym
+        // mode is entered.
+        restTimerNotificationServiceProvider.overrideWithValue(
+          const NoopRestTimerNotificationService(),
+        ),
         ...extraOverrides,
         // The repetition + weight unit catalogues are tiny direct-Drift
         // stream providers, overriding them inline is the established

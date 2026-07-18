@@ -30,6 +30,7 @@ import 'package:wger/features/routines/providers/gym_state.dart';
 import 'package:wger/features/routines/providers/gym_state_notifier.dart';
 import 'package:wger/features/routines/providers/routines_notifier.dart';
 import 'package:wger/features/routines/screens/gym_mode.dart';
+import 'package:wger/features/routines/services/rest_timer_notification_service.dart';
 
 import 'exercise_overview.dart';
 import 'log_page.dart';
@@ -73,6 +74,11 @@ class _GymModeState extends ConsumerState<GymMode> {
     // gym-state mutations with no await in between, and modifying a provider
     // during a life-cycle is not allowed.
     await Future<void>.delayed(Duration.zero);
+
+    final notificationService = ref.read(restTimerNotificationServiceProvider);
+    await notificationService.init();
+    final granted = await notificationService.requestPermission();
+    ref.read(restTimerPermissionGrantedProvider.notifier).state = granted;
 
     final notifier = ref.read(routinesRiverpodProvider.notifier);
     final routineId = widget._args.routineId;
