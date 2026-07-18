@@ -1,0 +1,49 @@
+name: Sideload APK
+
+# Personal-fork workflow: builds a debug-signed release APK on every push to
+# master and publishes it as a GitHub Release, so it can be downloaded and
+# sideloaded straight from a phone browser without any local Flutter/adb setup.
+
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: 3.44.4
+          cache: true
+
+      - run: flutter pub get
+
+      # Informative only -- a real compile error will also fail the build
+      # step below, which is the actual release gate.
+      - name: Analyze
+        run: flutter analyze
+        continue-on-error: true
+
+      - name: Test
+        run: flutter test
+        continue-on-error: true
+
+      - name: Build release APK
+        run: flutter build apk --release
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: build-${{ github.run_number }}
+          name: Sideload build ${{ github.run_number }}
+          body: ${{ github.event.head_commit.message }}
+          prerelease: true
+          files: build/app/outputs/flutter-apk/app-release.apk

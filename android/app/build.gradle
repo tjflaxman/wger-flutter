@@ -38,7 +38,10 @@ android {
 
     defaultConfig {
         // Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
-        applicationId "de.wger.flutter"
+        // Suffixed vs upstream (de.wger.flutter) so this personal reskin fork
+        // can be sideloaded alongside an official install without Android's
+        // package-signature check treating it as a conflicting update.
+        applicationId "de.wger.flutter.fork"
         minSdkVersion flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
@@ -55,7 +58,10 @@ android {
     }
     buildTypes {
         release {
-            signingConfig signingConfigs.release
+            // This fork has no access to upstream's Play Store signing secrets
+            // (fastlane/metadata/envfiles/key.properties), so fall back to the
+            // debug keystore when it's absent -- fine for personal sideloading.
+            signingConfig keystorePropertiesFile.exists() ? signingConfigs.release : signingConfigs.debug
         }
         debug {
             applicationIdSuffix ".debug"
