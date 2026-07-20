@@ -15,6 +15,9 @@ permissions:
 jobs:
   build-and-release:
     runs-on: ubuntu-latest
+    env:
+      SIDELOAD_KEYSTORE_BASE64: ${{ secrets.SIDELOAD_KEYSTORE_BASE64 }}
+      SIDELOAD_KEYSTORE_PASSWORD: ${{ secrets.SIDELOAD_KEYSTORE_PASSWORD }}
     steps:
       - uses: actions/checkout@v4
 
@@ -44,10 +47,7 @@ jobs:
       # device. This decodes a stable keystore generated once for this fork,
       # into the exact path/format android/app/build.gradle already expects.
       - name: Set up sideload signing key
-        if: ${{ secrets.SIDELOAD_KEYSTORE_BASE64 != '' }}
-        env:
-          SIDELOAD_KEYSTORE_BASE64: ${{ secrets.SIDELOAD_KEYSTORE_BASE64 }}
-          SIDELOAD_KEYSTORE_PASSWORD: ${{ secrets.SIDELOAD_KEYSTORE_PASSWORD }}
+        if: ${{ env.SIDELOAD_KEYSTORE_BASE64 != '' }}
         run: |
           mkdir -p fastlane/metadata/envfiles
           echo "$SIDELOAD_KEYSTORE_BASE64" | base64 -d > fastlane/metadata/envfiles/keys.jks
