@@ -155,9 +155,16 @@ class _ExerciseSectionWidgetState extends ConsumerState<ExerciseSectionWidget> {
               onPressed: () => setState(() => _showDetail = !_showDetail),
             ),
           ),
-          AnimatedCrossFade(
-            firstChild: const SizedBox.shrink(),
-            secondChild: Padding(
+          // Deliberately not AnimatedCrossFade: it lays out both branches at
+          // once (needed to interpolate between their sizes), and doing that
+          // for exercise-description HTML content (rendered via flutter_html)
+          // triggers a known flutter_html layout bug -- negative width
+          // constraints computed from AnimatedCrossFade's intrinsic-sizing
+          // pass, even while "collapsed". A plain conditional avoids ever
+          // laying it out until it's actually shown, at the cost of a snap
+          // instead of a cross-fade for this specific toggle.
+          if (_showDetail)
+            Padding(
               padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
               child: Column(
                 children: [
@@ -166,9 +173,6 @@ class _ExerciseSectionWidgetState extends ConsumerState<ExerciseSectionWidget> {
                 ],
               ),
             ),
-            crossFadeState: _showDetail ? CrossFadeState.showSecond : CrossFadeState.showFirst,
-            duration: AppMotion.standard,
-          ),
 
           _RestTimerRow(slotUuid: slot.uuid),
 
