@@ -198,15 +198,22 @@ void main() {
         expect(find.byType(Checkbox), findsNWidgets(6));
         // Exercise instructions are collapsed by default.
         expect(find.byType(ExerciseDetail), findsNothing);
+        expect(find.textContaining('Rest:'), findsNWidgets(2), reason: 'both exercises idle');
 
-        // Expand the "Bench press" section's instructions via its info toggle.
+        // Expand the "Bench press" section's instructions via its info
+        // toggle, then collapse it again -- ExerciseDetail (videos/images/
+        // description) is tall enough to push the second exercise's card
+        // outside the test's default viewport otherwise, which would make
+        // later finders miss it rather than reflect an actual bug.
         await tester.tap(find.byIcon(Icons.info_outline).first);
         await tester.pumpAndSettle();
         expect(find.byType(ExerciseDetail), findsOneWidget);
+        await tester.tap(find.byIcon(Icons.info_outline).first);
+        await tester.pumpAndSettle();
+        expect(find.byType(ExerciseDetail), findsNothing);
 
         // Complete the first set: the rest timer for that exercise should
         // start automatically.
-        expect(find.textContaining('Rest:'), findsNWidgets(2), reason: 'both exercises idle');
         await tester.tap(find.byType(Checkbox).first);
         await tester.pumpAndSettle();
         expect(find.text('0/3 sets'), findsOneWidget, reason: 'one exercise now has a set done');
