@@ -102,7 +102,7 @@ class NavigationFooter extends ConsumerWidget {
           child: GestureDetector(
             onTap: () => showDialog(
               context: context,
-              builder: (ctx) => WorkoutMenuDialog(_controller, initialIndex: 1),
+              builder: (ctx) => WorkoutMenuDialog(_controller),
             ),
             child: Padding(
               padding: const EdgeInsets.symmetric(vertical: 15),

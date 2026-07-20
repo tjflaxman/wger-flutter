@@ -56,7 +56,7 @@ void main() {
       routine: routine,
     );
 
-    notifier.calculatePages();
+    notifier.buildWorkoutStructure();
   });
 
   tearDown(() {

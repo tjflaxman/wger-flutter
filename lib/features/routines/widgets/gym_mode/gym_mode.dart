@@ -26,18 +26,15 @@ import 'package:wger/core/network/network_provider.dart';
 import 'package:wger/core/widgets/error.dart';
 import 'package:wger/core/widgets/progress_indicator.dart';
 import 'package:wger/features/routines/models/routine.dart';
-import 'package:wger/features/routines/providers/gym_state.dart';
 import 'package:wger/features/routines/providers/gym_state_notifier.dart';
 import 'package:wger/features/routines/providers/routines_notifier.dart';
 import 'package:wger/features/routines/screens/gym_mode.dart';
 import 'package:wger/features/routines/services/rest_timer_notification_service.dart';
 
-import 'exercise_overview.dart';
-import 'log_page.dart';
+import 'active_workout_screen.dart';
 import 'session_page.dart';
 import 'start_page.dart';
 import 'summary.dart';
-import 'timer.dart';
 
 class GymMode extends ConsumerStatefulWidget {
   final GymModeArguments _args;
@@ -107,49 +104,22 @@ class _GymModeState extends ConsumerState<GymMode> {
       widget._args.iteration,
     );
     await gymViewModel.loadPrefs();
-    gymViewModel.calculatePages();
+    gymViewModel.buildWorkoutStructure();
 
     return initialPage;
   }
 
-  List<Widget> _getContent(GymModeState state) {
-    final gymState = ref.watch(gymStateProvider);
-    final List<Widget> out = [];
-
-    // Workout overview
-    out.add(StartPage(_controller));
-
-    // Sets
-    for (final page in state.pages) {
-      for (final slotPage in page.slotPages) {
-        if (slotPage.type == SlotPageType.exerciseOverview) {
-          out.add(ExerciseOverview(_controller, slotPage.uuid));
-        }
-
-        if (slotPage.type == SlotPageType.log) {
-          out.add(LogPage(_controller, slotPage.uuid));
-        }
-
-        // Timer. Use rest time from config data if available, otherwise use user settings
-        final rest = slotPage.setConfigData?.restTime;
-        if (slotPage.type == SlotPageType.timer) {
-          out.add(
-            (rest != null || gymState.useCountdownBetweenSets)
-                ? TimerCountdownWidget(
-                    _controller,
-                    (rest ?? gymState.countdownDuration.inSeconds).toInt(),
-                  )
-                : TimerWidget(_controller),
-          );
-        }
-      }
-    }
-
-    // End
-    out.add(SessionPage(_controller));
-    out.add(WorkoutSummary(_controller));
-
-    return out;
+  // Fixed 4-slot flow: overview -> the whole active workout (a single
+  // scrolling screen, not one page per set/exercise/timer) -> post-workout
+  // notes -> summary. Unlike the old per-set page list, this doesn't depend
+  // on GymModeState at all, since ActiveWorkoutScreen reads it directly.
+  List<Widget> _getContent() {
+    return [
+      StartPage(_controller),
+      ActiveWorkoutScreen(_controller),
+      SessionPage(_controller),
+      WorkoutSummary(_controller),
+    ];
   }
 
   @override
@@ -173,17 +143,12 @@ class _GymModeState extends ConsumerState<GymMode> {
             }
           });
 
-          final state = ref.watch(gymStateProvider);
-          final children = [
-            ..._getContent(state),
-          ];
+          final children = _getContent();
 
           return PageView(
             controller: _controller,
             onPageChanged: (page) {
-              ref.read(gymStateProvider.notifier).setCurrentPage(page);
-
-              // Check if the last page is reached
+              // Last page (WorkoutSummary) reached: clear gym state.
               if (page == children.length - 1) {
                 widget._logger.finer('Last page reached, clearing gym state');
                 ref.read(gymStateProvider.notifier).clear();

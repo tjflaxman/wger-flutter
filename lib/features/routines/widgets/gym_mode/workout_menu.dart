@@ -1,105 +1,41 @@
-// /*
-//  * This file is part of wger Workout Manager <https://github.com/wger-project>.
-//  * Copyright (C) 2020, 2025 wger Team
-//  *
-//  * wger Workout Manager is free software: you can redistribute it and/or modify
-//  * it under the terms of the GNU Affero General Public License as published by
-//  * the Free Software Foundation, either version 3 of the License, or
-//  * (at your option) any later version.
-//  *
-//  * wger Workout Manager is distributed in the hope that it will be useful,
-//  * but WITHOUT ANY WARRANTY; without even the implied warranty of
-//  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-//  * GNU Affero General Public License for more details.
-//  *
-//  * You should have received a copy of the GNU Affero General Public License
-//  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
-//  */
+/*
+ * This file is part of wger Workout Manager <https://github.com/wger-project>.
+ * Copyright (C) 2020, 2025 wger Team
+ *
+ * wger Workout Manager is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * wger Workout Manager is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ */
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:logging/logging.dart';
-import 'package:wger/core/consts.dart';
 import 'package:wger/features/exercises/widgets/autocompleter.dart';
 import 'package:wger/features/routines/providers/gym_state.dart';
 import 'package:wger/features/routines/providers/gym_state_notifier.dart';
 import 'package:wger/l10n/generated/app_localizations.dart';
 
+/// A single overview of the workout's progress + inline exercise swap/add.
+/// Used to be one of two tabs alongside a "jump to page" checklist
+/// (NavigationTab) -- that's gone now that the whole workout is visible by
+/// scrolling on one screen, so there's nothing left to jump to.
 class WorkoutMenu extends StatelessWidget {
   final PageController _controller;
-  final int initialIndex;
 
-  const WorkoutMenu(this._controller, {this.initialIndex = 0, super.key});
+  const WorkoutMenu(this._controller, {super.key});
 
   @override
   Widget build(BuildContext context) {
-    return DefaultTabController(
-      initialIndex: initialIndex,
-      length: 2,
-      child: Column(
-        children: [
-          const TabBar(
-            tabs: [
-              Tab(icon: Icon(Icons.menu_open)),
-              Tab(icon: Icon(Icons.stacked_bar_chart)),
-            ],
-          ),
-          Flexible(
-            child: TabBarView(
-              children: [
-                NavigationTab(_controller),
-                ProgressionTab(_controller),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class NavigationTab extends ConsumerWidget {
-  final PageController _controller;
-
-  const NavigationTab(this._controller);
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final state = ref.watch(gymStateProvider);
-
-    return SingleChildScrollView(
-      child: Column(
-        children: [
-          ...state.pages.where((pageEntry) => pageEntry.type == PageType.set).map((page) {
-            return ListTile(
-              leading: page.allLogsDone ? const Icon(Icons.check) : null,
-              title: Text(
-                page.exercises
-                    .map(
-                      (exercise) => exercise
-                          .getTranslation(Localizations.localeOf(context).languageCode)
-                          .name,
-                    )
-                    .toList()
-                    .join('\n'),
-                style: TextStyle(
-                  decoration: page.allLogsDone ? TextDecoration.lineThrough : TextDecoration.none,
-                ),
-              ),
-              trailing: const Icon(Icons.chevron_right),
-              onTap: () {
-                _controller.animateToPage(
-                  page.pageIndex,
-                  duration: DEFAULT_ANIMATION_DURATION,
-                  curve: DEFAULT_ANIMATION_CURVE,
-                );
-                Navigator.of(context).pop();
-              },
-            );
-          }),
-        ],
-      ),
-    );
+    return ProgressionTab(_controller);
   }
 }
 
@@ -114,8 +50,8 @@ class ProgressionTab extends ConsumerStatefulWidget {
 }
 
 class _ProgressionTabState extends ConsumerState<ProgressionTab> {
-  String? showSwapWidgetToPage;
-  String? showAddExerciseWidgetToPage;
+  String? showSwapWidgetToSlot;
+  String? showAddExerciseWidgetToSlot;
   _ProgressionTabState();
 
   @override
@@ -129,17 +65,17 @@ class _ProgressionTabState extends ConsumerState<ProgressionTab> {
         padding: const EdgeInsets.symmetric(horizontal: 15),
         child: Column(
           children: [
-            ...state.pages.where((page) => page.type == PageType.set).map((page) {
-              if (page.exercises.isEmpty) {
-                widget._logger.warning('Page ${page.uuid} has no exercises, skipping');
+            ...state.exerciseSlots.map((slot) {
+              if (slot.exercises.isEmpty) {
+                widget._logger.warning('Slot ${slot.uuid} has no exercises, skipping');
                 return Container();
               }
 
               // For supersets, prefix the exercise with A, B, C so it can be identified
               // in the set list below
-              final isSuperset = page.exercises.length > 1;
-              final pageExerciseTitle = isSuperset
-                  ? page.exercises
+              final isSuperset = slot.isSuperset;
+              final slotExerciseTitle = isSuperset
+                  ? slot.exercises
                         .asMap()
                         .entries
                         .map((entry) {
@@ -150,139 +86,115 @@ class _ProgressionTabState extends ConsumerState<ProgressionTab> {
                           return '$label: $name';
                         })
                         .join('\n')
-                  : page.exercises.first.getTranslation(languageCode).name;
+                  : slot.exercises.first.getTranslation(languageCode).name;
 
               return Column(
                 mainAxisSize: MainAxisSize.max,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(pageExerciseTitle, style: Theme.of(context).textTheme.bodyLarge),
-                  ...page.slotPages.where((slotPage) => slotPage.type == SlotPageType.log).map(
-                    (slotPage) {
-                      String setPrefix = '';
-                      if (isSuperset) {
-                        final exerciseIndex = page.exercises.indexWhere(
-                          (ex) => ex.id == slotPage.setConfigData!.exercise.id,
-                        );
-                        if (exerciseIndex != -1) {
-                          setPrefix = '${String.fromCharCode(65 + exerciseIndex)}: ';
-                        }
-                      }
-
-                      // Sets that are done are marked with a strikethrough
-                      final decoration = slotPage.logDone
-                          ? TextDecoration.lineThrough
-                          : TextDecoration.none;
-
-                      // Sets that are done have a lighter color
-                      final color = slotPage.logDone
-                          ? theme.colorScheme.onSurface.withValues(alpha: 0.6)
-                          : null;
-
-                      // The row for the current page is highlighted in bold
-                      final fontWeight = state.currentPage == slotPage.pageIndex
-                          ? FontWeight.bold
-                          : null;
-
-                      IconData icon = Icons.circle_outlined;
-                      if (slotPage.logDone) {
-                        icon = Icons.check_circle_rounded;
-                      } else if (state.currentPage == slotPage.pageIndex) {
-                        icon = Icons.play_circle_fill;
-                      }
-
-                      return Row(
-                        children: [
-                          Icon(icon, size: 16),
-                          const SizedBox(width: 4),
-                          Text(
-                            '$setPrefix${slotPage.setConfigData!.textReprWithType}',
-                            style: theme.textTheme.bodyMedium!.copyWith(
-                              decoration: decoration,
-                              fontWeight: fontWeight,
-                              color: color,
-                            ),
-                          ),
-                        ],
+                  Text(slotExerciseTitle, style: Theme.of(context).textTheme.bodyLarge),
+                  ...slot.setRows.map((row) {
+                    String setPrefix = '';
+                    if (isSuperset) {
+                      final exerciseIndex = slot.exercises.indexWhere(
+                        (ex) => ex.id == row.setConfigData.exercise.id,
                       );
-                    },
-                  ),
+                      if (exerciseIndex != -1) {
+                        setPrefix = '${String.fromCharCode(65 + exerciseIndex)}: ';
+                      }
+                    }
+
+                    // Sets that are done are marked with a strikethrough
+                    final decoration = row.logDone
+                        ? TextDecoration.lineThrough
+                        : TextDecoration.none;
+
+                    // Sets that are done have a lighter color
+                    final color = row.logDone
+                        ? theme.colorScheme.onSurface.withValues(alpha: 0.6)
+                        : null;
+
+                    final icon = row.logDone ? Icons.check_circle_rounded : Icons.circle_outlined;
+
+                    return Row(
+                      children: [
+                        Icon(icon, size: 16),
+                        const SizedBox(width: 4),
+                        Text(
+                          '$setPrefix${row.setConfigData.textReprWithType}',
+                          style: theme.textTheme.bodyMedium!.copyWith(
+                            decoration: decoration,
+                            color: color,
+                          ),
+                        ),
+                      ],
+                    );
+                  }),
 
                   Row(
                     mainAxisSize: MainAxisSize.max,
-                    //mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       IconButton(
-                        onPressed: page.allLogsDone
+                        onPressed: slot.allLogsDone
                             ? null
                             : () {
-                                if (showSwapWidgetToPage == page.uuid) {
+                                if (showSwapWidgetToSlot == slot.uuid) {
                                   setState(() {
-                                    showSwapWidgetToPage = null;
+                                    showSwapWidgetToSlot = null;
                                   });
                                 } else {
                                   setState(() {
-                                    showSwapWidgetToPage = page.uuid;
-                                    showAddExerciseWidgetToPage = null;
+                                    showSwapWidgetToSlot = slot.uuid;
+                                    showAddExerciseWidgetToSlot = null;
                                   });
                                 }
                               },
                         icon: Icon(
-                          key: ValueKey('swap-icon-${page.uuid}'),
-                          showSwapWidgetToPage == page.uuid
+                          key: ValueKey('swap-icon-${slot.uuid}'),
+                          showSwapWidgetToSlot == slot.uuid
                               ? Icons.change_circle
                               : Icons.change_circle_outlined,
                         ),
                       ),
                       IconButton(
-                        onPressed: page.allLogsDone
+                        onPressed: slot.allLogsDone
                             ? null
                             : () {
-                                if (showAddExerciseWidgetToPage == page.uuid) {
+                                if (showAddExerciseWidgetToSlot == slot.uuid) {
                                   setState(() {
-                                    showAddExerciseWidgetToPage = null;
+                                    showAddExerciseWidgetToSlot = null;
                                   });
                                 } else {
                                   setState(() {
-                                    showAddExerciseWidgetToPage = page.uuid;
-                                    showSwapWidgetToPage = null;
+                                    showAddExerciseWidgetToSlot = slot.uuid;
+                                    showSwapWidgetToSlot = null;
                                   });
                                 }
                               },
                         icon: Icon(
-                          key: ValueKey('add-icon-${page.uuid}'),
-                          showAddExerciseWidgetToPage == page.uuid ? Icons.add_circle : Icons.add,
+                          key: ValueKey('add-icon-${slot.uuid}'),
+                          showAddExerciseWidgetToSlot == slot.uuid
+                              ? Icons.add_circle
+                              : Icons.add,
                         ),
-                      ),
-                      Expanded(child: Container()),
-                      IconButton(
-                        onPressed: () {
-                          widget._controller.animateToPage(
-                            page.pageIndex,
-                            duration: DEFAULT_ANIMATION_DURATION,
-                            curve: DEFAULT_ANIMATION_CURVE,
-                          );
-                          Navigator.of(context).pop();
-                        },
-                        icon: const Icon(Icons.chevron_right),
                       ),
                     ],
                   ),
-                  if (showSwapWidgetToPage == page.uuid)
+                  if (showSwapWidgetToSlot == slot.uuid)
                     ExerciseSwapWidget(
-                      page.uuid,
+                      slot.uuid,
                       onDone: () {
                         setState(() {
-                          showSwapWidgetToPage = null;
+                          showSwapWidgetToSlot = null;
                         });
                       },
                     ),
-                  if (showAddExerciseWidgetToPage == page.uuid)
+                  if (showAddExerciseWidgetToSlot == slot.uuid)
                     ExerciseAddWidget(
-                      page.uuid,
+                      slot.uuid,
                       onDone: () {
                         setState(() {
-                          showAddExerciseWidgetToPage = null;
+                          showAddExerciseWidgetToSlot = null;
                         });
                       },
                     ),
@@ -309,16 +221,16 @@ class _ProgressionTabState extends ConsumerState<ProgressionTab> {
 class ExerciseSwapWidget extends ConsumerWidget {
   final _logger = Logger('ExerciseSwapWidget');
 
-  final String pageUUID;
+  final String slotUUID;
   final VoidCallback? onDone;
 
-  ExerciseSwapWidget(this.pageUUID, {this.onDone, super.key});
+  ExerciseSwapWidget(this.slotUUID, {this.onDone, super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final state = ref.watch(gymStateProvider);
     final gymProvider = ref.read(gymStateProvider.notifier);
-    final page = state.pages.firstWhere((p) => p.uuid == pageUUID);
+    final slot = state.exerciseSlots.firstWhere((s) => s.uuid == slotUUID);
 
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 10),
@@ -327,7 +239,7 @@ class ExerciseSwapWidget extends ConsumerWidget {
           padding: const EdgeInsets.all(5),
           child: Column(
             children: [
-              ...page.exercises.map((e) {
+              ...slot.exercises.map((e) {
                 return Column(
                   mainAxisSize: MainAxisSize.max,
                   children: [
@@ -339,7 +251,7 @@ class ExerciseSwapWidget extends ConsumerWidget {
                     ExerciseAutocompleter(
                       onExerciseSelected: (exercise) {
                         gymProvider.replaceExercises(
-                          page.uuid,
+                          slot.uuid,
                           originalExerciseId: e.id,
                           newExercise: exercise,
                         );
@@ -362,16 +274,14 @@ class ExerciseSwapWidget extends ConsumerWidget {
 class ExerciseAddWidget extends ConsumerWidget {
   final _logger = Logger('ExerciseAddWidget');
 
-  final String pageUUID;
+  final String slotUUID;
   final VoidCallback? onDone;
 
-  ExerciseAddWidget(this.pageUUID, {this.onDone, super.key});
+  ExerciseAddWidget(this.slotUUID, {this.onDone, super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final state = ref.watch(gymStateProvider);
     final gymProvider = ref.read(gymStateProvider.notifier);
-    final page = state.pages.firstWhere((p) => p.uuid == pageUUID);
 
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 10),
@@ -382,12 +292,12 @@ class ExerciseAddWidget extends ConsumerWidget {
             children: [
               ExerciseAutocompleter(
                 onExerciseSelected: (exercise) {
-                  gymProvider.addExerciseAfterPage(
-                    page.uuid,
+                  gymProvider.addExerciseAfterSlot(
+                    slotUUID,
                     newExercise: exercise,
                   );
                   onDone?.call();
-                  _logger.fine('Added exercise ${exercise.id} after page $pageUUID');
+                  _logger.fine('Added exercise ${exercise.id} after slot $slotUUID');
                 },
               ),
               const Icon(Icons.arrow_downward),
@@ -403,27 +313,28 @@ class ExerciseAddWidget extends ConsumerWidget {
 class WorkoutMenuDialog extends ConsumerWidget {
   final PageController controller;
   final bool showEndWorkoutButton;
-  final int initialIndex;
 
   const WorkoutMenuDialog(
     this.controller, {
     super.key,
     this.showEndWorkoutButton = true,
-    this.initialIndex = 0,
   });
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final gymState = ref.watch(gymStateProvider);
-
     final endWorkoutButton = showEndWorkoutButton
         ? TextButton(
             child: Text(AppLocalizations.of(context).endWorkout),
             onPressed: () {
+              // GymMode's outer PageView is a fixed [Start, ActiveWorkout,
+              // Session, Summary] -- index 3 (WorkoutSummary) matches the
+              // previous behavior, which animated to an intentionally
+              // out-of-range page index that PageView clamped to its last
+              // valid page.
               controller.animateToPage(
-                gymState.totalPages,
-                duration: DEFAULT_ANIMATION_DURATION,
-                curve: DEFAULT_ANIMATION_CURVE,
+                3,
+                duration: const Duration(milliseconds: 200),
+                curve: Curves.easeOut,
               );
 
               Navigator.of(context).pop();
@@ -439,7 +350,7 @@ class WorkoutMenuDialog extends ConsumerWidget {
       contentPadding: EdgeInsets.zero,
       content: SizedBox(
         width: double.maxFinite,
-        child: WorkoutMenu(controller, initialIndex: initialIndex),
+        child: WorkoutMenu(controller),
       ),
       actions: [
         ?endWorkoutButton,

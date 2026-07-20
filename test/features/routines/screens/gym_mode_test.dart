@@ -41,13 +41,10 @@ import 'package:wger/features/routines/providers/workout_session_repository.dart
 import 'package:wger/features/routines/screens/gym_mode.dart';
 import 'package:wger/features/routines/screens/routine_screen.dart';
 import 'package:wger/features/routines/services/rest_timer_notification_service.dart';
-import 'package:wger/features/routines/widgets/forms/rir.dart';
-import 'package:wger/features/routines/widgets/gym_mode/exercise_overview.dart';
-import 'package:wger/features/routines/widgets/gym_mode/log_page.dart';
+import 'package:wger/features/routines/widgets/gym_mode/active_workout_screen.dart';
 import 'package:wger/features/routines/widgets/gym_mode/session_page.dart';
 import 'package:wger/features/routines/widgets/gym_mode/start_page.dart';
 import 'package:wger/features/routines/widgets/gym_mode/summary.dart';
-import 'package:wger/features/routines/widgets/gym_mode/timer.dart';
 import 'package:wger/features/trophies/providers/trophy_repository.dart';
 import 'package:wger/l10n/generated/app_localizations.dart';
 
@@ -161,7 +158,7 @@ void main() {
   }
 
   testWidgets(
-    'Test the widgets on the gym mode screen',
+    'Walks through the gym mode flow: start -> active workout -> session -> summary',
     (WidgetTester tester) async {
       await withClock(Clock.fixed(DateTime(2025, 3, 29, 14, 33)), () async {
         await tester.pumpWidget(renderGymMode());
@@ -184,152 +181,29 @@ void main() {
         await tester.pumpAndSettle();
 
         //
-        // Bench press - exercise overview page
+        // Active workout screen: both exercises show as collapsed sections
         //
+        expect(find.byType(ActiveWorkoutScreen), findsOneWidget);
+        expect(find.byType(ExerciseSectionWidget), findsNWidgets(2));
         expect(find.text('Bench press'), findsOneWidget);
-        expect(find.byType(ExerciseOverview), findsOneWidget);
-        expect(find.byIcon(Icons.close), findsOneWidget);
-        expect(find.byIcon(Icons.menu), findsOneWidget);
-        expect(find.byIcon(Icons.chevron_left), findsOneWidget);
-        expect(find.byIcon(Icons.chevron_right), findsOneWidget);
-        await tester.drag(find.byType(ExerciseOverview), const Offset(-500.0, 0.0));
-        await tester.pumpAndSettle();
-
-        //
-        // Bench press - Log
-        //
-        expect(find.text('Bench press'), findsOneWidget);
-        expect(find.byType(LogPage), findsOneWidget);
-        expect(find.byType(Form), findsOneWidget);
-        expect(find.text('10 × 10 kg (1.5 RiR)'), findsOneWidget);
-        expect(find.text('12 × 10 kg (2 RiR)'), findsOneWidget);
-
-        // TODO: commented out for now
-        // expect(find.text('Make sure to warm up'), findsOneWidget, reason: 'Set comment');
-        expect(find.byIcon(Icons.close), findsOneWidget);
-        expect(find.byIcon(Icons.menu), findsOneWidget);
-        expect(find.byIcon(Icons.chevron_left), findsOneWidget);
-        expect(find.byIcon(Icons.chevron_right), findsOneWidget);
-
-        // The form shows reps and weight, each with its own unit
-        // picker (PopupMenuButton<int>), plus the RiR slider, all at
-        // once. Scope the popup-menu lookup to the LogPage so other
-        // popup menus elsewhere in the app shell don't interfere.
-        expect(find.byType(TextFormField), findsNWidgets(2));
-        expect(
-          find.descendant(
-            of: find.byType(LogPage),
-            matching: find.byType(PopupMenuButton<int>),
-          ),
-          findsNWidgets(2),
-        );
-        expect(find.byType(RiRInputWidget), findsOneWidget);
-        // Advance to the next page via the chevron, the RiR slider
-        // would otherwise eat a horizontal-drag gesture started over
-        // its track.
-        await tester.tap(find.byIcon(Icons.chevron_right));
-        await tester.pumpAndSettle();
-
-        //
-        // Bench press - pause
-        //
-        expect(find.text('Pause'), findsOneWidget);
-        expect(find.byType(TimerCountdownWidget), findsOneWidget);
-        expect(find.byIcon(Icons.close), findsOneWidget);
-        expect(find.byIcon(Icons.menu), findsOneWidget);
-        expect(find.byIcon(Icons.chevron_left), findsOneWidget);
-        expect(find.byIcon(Icons.chevron_right), findsOneWidget);
-        await tester.tap(find.byIcon(Icons.chevron_right));
-        await tester.pumpAndSettle();
-
-        //
-        // Bench press - log
-        //
-        expect(find.text('Bench press'), findsOneWidget);
-        expect(find.byType(LogPage), findsOneWidget);
-        expect(find.byType(Form), findsOneWidget);
-        await tester.drag(find.byType(LogPage), const Offset(-500.0, 0.0));
-        await tester.pumpAndSettle();
-
-        //
-        // Pause
-        //
-        expect(find.text('Pause'), findsOneWidget);
-        expect(find.byType(TimerCountdownWidget), findsOneWidget);
-        expect(find.byIcon(Icons.chevron_left), findsOneWidget);
-        expect(find.byIcon(Icons.close), findsOneWidget);
-        expect(find.byIcon(Icons.chevron_right), findsOneWidget);
-        await tester.tap(find.byIcon(Icons.chevron_right));
-        await tester.pumpAndSettle();
-
-        //
-        // Bench press - log
-        //
-        expect(find.text('Bench press'), findsOneWidget);
-        expect(find.byType(LogPage), findsOneWidget);
-        expect(find.byType(Form), findsOneWidget);
-        await tester.tap(find.byIcon(Icons.chevron_right));
-        await tester.pumpAndSettle();
-
-        //
-        // Pause
-        //
-        expect(find.text('Pause'), findsOneWidget);
-        expect(find.byType(TimerCountdownWidget), findsOneWidget);
-        await tester.tap(find.byIcon(Icons.chevron_right));
-        await tester.pumpAndSettle();
-
-        //
-        // Side raises - overview
-        //
         expect(find.text('Side raises'), findsOneWidget);
-        expect(find.byType(ExerciseOverview), findsOneWidget);
-        await tester.tap(find.byIcon(Icons.chevron_right));
-        await tester.pumpAndSettle();
+        expect(find.text('0/3 sets'), findsNWidgets(2));
+        // Set rows aren't visible until a section is expanded.
+        expect(find.byType(SetRowWidget), findsNothing);
 
-        //
-        // Side raises - log
-        //
-        expect(find.text('Side raises'), findsOneWidget);
-        expect(find.byType(LogPage), findsOneWidget);
-        await tester.tap(find.byIcon(Icons.chevron_right));
+        // Expand the "Bench press" section and confirm its 3 sets appear.
+        await tester.tap(find.text('Bench press'));
         await tester.pumpAndSettle();
+        expect(find.byType(SetRowWidget), findsNWidgets(3));
+        expect(find.text('3x100kg'), findsNWidgets(3), reason: 'textReprWithType per set');
 
-        //
-        // Side raises - timer
-        //
-        expect(find.byType(TimerWidget), findsOneWidget);
-        await tester.tap(find.byIcon(Icons.chevron_right));
+        // Collapse it again before moving on.
+        await tester.tap(find.text('Bench press'));
         await tester.pumpAndSettle();
+        expect(find.byType(SetRowWidget), findsNothing);
 
-        //
-        // Side raises - log
-        //
-        expect(find.text('Side raises'), findsOneWidget);
-        expect(find.byType(LogPage), findsOneWidget);
-        await tester.tap(find.byIcon(Icons.chevron_right));
-        await tester.pumpAndSettle();
-
-        //
-        // Side raises - timer
-        //
-        expect(find.byType(TimerWidget), findsOneWidget);
-        await tester.tap(find.byIcon(Icons.chevron_right));
-        await tester.pumpAndSettle();
-
-        //
-        // Side raises - log
-        //
-        expect(find.text('Side raises'), findsOneWidget);
-        expect(find.byType(LogPage), findsOneWidget);
-        await tester.tap(find.byIcon(Icons.chevron_right));
-        await tester.pumpAndSettle();
-
-        //
-        // Side raises - timer
-        //
-        expect(find.byType(TimerWidget), findsOneWidget);
-        await tester.tap(find.byIcon(Icons.chevron_right));
+        // Finish the workout.
+        await tester.tap(find.byKey(const ValueKey('finish-workout-button')));
         await tester.pumpAndSettle();
 
         //
@@ -363,7 +237,6 @@ void main() {
         expect(find.byIcon(Icons.chevron_right), findsNothing);
       });
     },
-    tags: ['golden'],
     semanticsEnabled: false,
   );
 
@@ -474,9 +347,12 @@ void main() {
   });
 
   testWidgets(
-    'fresh session with exercise pages off: first swipe to a log page does not crash',
+    'renders the active workout screen without crashing regardless of showExercisePages',
     (WidgetTester tester) async {
-      // Test having a null page, which can happen on the first swipe of a fresh session
+      // showExercisePages predates this screen (it used to toggle a separate
+      // full-page exercise overview between the start page and the first log
+      // page); it's kept as a setting for now but should no longer affect
+      // whether the active workout screen renders correctly.
       await PreferenceHelper.asyncPref.setBool(PREFS_SHOW_EXERCISES, false);
 
       await withClock(Clock.fixed(DateTime(2025, 3, 29, 14, 33)), () async {
@@ -486,14 +362,12 @@ void main() {
         await tester.pumpAndSettle();
 
         expect(find.byType(StartPage), findsOneWidget);
-        expect(find.byType(ExerciseOverview), findsNothing);
 
-        // First swipe off the start page lands directly on a log page.
-        await tester.drag(find.byType(StartPage), const Offset(-500.0, 0.0));
+        await tester.tap(find.byIcon(Icons.chevron_right));
         await tester.pumpAndSettle();
 
         expect(tester.takeException(), isNull);
-        expect(find.byType(LogPage), findsOneWidget);
+        expect(find.byType(ActiveWorkoutScreen), findsOneWidget);
         expect(find.text('Bench press'), findsOneWidget);
       });
     },

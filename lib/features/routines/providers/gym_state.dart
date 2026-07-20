@@ -39,114 +39,37 @@ const DEFAULT_COUNTDOWN_DURATION = 180;
 const MIN_COUNTDOWN_DURATION = 10;
 const MAX_COUNTDOWN_DURATION = 1800;
 
-enum PageType {
-  start,
-  set,
-  session,
-  workoutSummary,
-}
-
-enum SlotPageType {
-  exerciseOverview,
-  log,
-  timer,
-}
-
-class PageEntry {
+/// One set within an [ExerciseSlotEntry], i.e. one row in the active-workout
+/// scroll screen. Replaces the old SlotPageEntry (which additionally tracked
+/// a `type`/`pageIndex` for a PageView -- meaningless once every set is a row
+/// in a scrolling list rather than its own page).
+class SetRowEntry {
   final String uuid;
 
-  final PageType type;
-
-  /// Absolute page index
-  final int pageIndex;
-
-  final List<SlotPageEntry> slotPages;
-
-  PageEntry({
-    required this.type,
-    required this.pageIndex,
-    this.slotPages = const [],
-    String? uuid,
-  }) : uuid = uuid ?? uuidV4(),
-       assert(
-         slotPages.isEmpty || type == PageType.set,
-         'SlotEntries can only be set for set pages',
-       );
-
-  PageEntry copyWith({
-    String? uuid,
-    PageType? type,
-    int? pageIndex,
-    List<SlotPageEntry>? slotPages,
-  }) {
-    return PageEntry(
-      uuid: uuid ?? this.uuid,
-      type: type ?? this.type,
-      pageIndex: pageIndex ?? this.pageIndex,
-      slotPages: slotPages ?? this.slotPages,
-    );
-  }
-
-  List<Exercise> get exercises {
-    final exerciseSet = <Exercise>{};
-    for (final entry in slotPages) {
-      exerciseSet.add(entry.setConfigData!.exercise);
-    }
-    return exerciseSet.toList();
-  }
-
-  // Whether all sub-pages (e.g. log pages) are marked as done.
-  bool get allLogsDone =>
-      slotPages.where((entry) => entry.type == SlotPageType.log).every((entry) => entry.logDone);
-
-  @override
-  String toString() => 'PageEntry(type: $type, pageIndex: $pageIndex)';
-}
-
-class SlotPageEntry {
-  final String uuid;
-
-  final SlotPageType type;
-
-  /// index within a set for overview (e.g. "1 of 5 sets")
+  /// 0-based position of this set within its own exercise's sets (e.g. "set
+  /// 2 of 4"), not a global position across the whole workout.
   final int setIndex;
 
-  /// Absolute page index
-  final int pageIndex;
-
-  /// Whether the log page has been marked as done
   final bool logDone;
 
-  /// The associated SetConfigData
-  final SetConfigData? setConfigData;
+  final SetConfigData setConfigData;
 
-  SlotPageEntry({
-    required this.type,
-    required this.pageIndex,
+  SetRowEntry({
     required this.setIndex,
-    this.setConfigData,
+    required this.setConfigData,
     this.logDone = false,
     String? uuid,
-  }) : assert(
-         type != SlotPageType.log || setConfigData != null,
-         'You need to set setConfigData for SlotPageType.log',
-       ),
-       uuid = uuid ?? uuidV4();
+  }) : uuid = uuid ?? uuidV4();
 
-  SlotPageEntry copyWith({
+  SetRowEntry copyWith({
     String? uuid,
-    SlotPageType? type,
-    int? exerciseId,
     int? setIndex,
-    int? pageIndex,
     SetConfigData? setConfigData,
     bool? logDone,
   }) {
-    return SlotPageEntry(
+    return SetRowEntry(
       uuid: uuid ?? this.uuid,
-      type: type ?? this.type,
       setIndex: setIndex ?? this.setIndex,
-      pageIndex: pageIndex ?? this.pageIndex,
       setConfigData: setConfigData ?? this.setConfigData,
       logDone: logDone ?? this.logDone,
     );
@@ -154,21 +77,49 @@ class SlotPageEntry {
 
   @override
   String toString() =>
-      'SlotPageEntry('
-      'uuid: $uuid, '
-      'type: $type, '
-      'setIndex: $setIndex, '
-      'pageIndex: $pageIndex, '
-      'logDone: $logDone'
-      ')';
+      'SetRowEntry(uuid: $uuid, setIndex: $setIndex, logDone: $logDone)';
+}
+
+/// One exercise-section in the active-workout scroll screen, corresponding
+/// to one routine "slot" (more than one exercise means a superset).
+/// Replaces the old PageEntry (which existed purely to flatten the routine
+/// into a 1-D page index a PageController could jump to -- there's no such
+/// index in a scrolling list).
+class ExerciseSlotEntry {
+  final String uuid;
+  final List<Exercise> exercises;
+  final List<SetRowEntry> setRows;
+
+  ExerciseSlotEntry({
+    required this.exercises,
+    this.setRows = const [],
+    String? uuid,
+  }) : uuid = uuid ?? uuidV4();
+
+  ExerciseSlotEntry copyWith({
+    String? uuid,
+    List<Exercise>? exercises,
+    List<SetRowEntry>? setRows,
+  }) {
+    return ExerciseSlotEntry(
+      uuid: uuid ?? this.uuid,
+      exercises: exercises ?? this.exercises,
+      setRows: setRows ?? this.setRows,
+    );
+  }
+
+  bool get allLogsDone => setRows.isNotEmpty && setRows.every((row) => row.logDone);
+
+  bool get isSuperset => exercises.length > 1;
+
+  @override
+  String toString() => 'ExerciseSlotEntry(uuid: $uuid, exercises: ${exercises.length})';
 }
 
 class GymModeState {
-  // Navigation data
   final bool isInitialized;
 
-  final List<PageEntry> pages;
-  final int currentPage;
+  final List<ExerciseSlotEntry> exerciseSlots;
 
   final TimeOfDay startTime;
   final DateTime validUntil;
@@ -189,8 +140,7 @@ class GymModeState {
 
   GymModeState({
     this.isInitialized = false,
-    this.pages = const [],
-    this.currentPage = 0,
+    this.exerciseSlots = const [],
 
     this.showExercisePages = true,
     this.showTimerPages = true,
@@ -221,10 +171,8 @@ class GymModeState {
   }
 
   GymModeState copyWith({
-    // Navigation data
     bool? isInitialized,
-    List<PageEntry>? pages,
-    int? currentPage,
+    List<ExerciseSlotEntry>? exerciseSlots,
 
     // Routine data
     int? dayId,
@@ -245,8 +193,7 @@ class GymModeState {
   }) {
     return GymModeState(
       isInitialized: isInitialized ?? this.isInitialized,
-      pages: pages ?? this.pages,
-      currentPage: currentPage ?? this.currentPage,
+      exerciseSlots: exerciseSlots ?? this.exerciseSlots,
 
       dayId: dayId ?? this.dayId,
       iteration: iteration ?? this.iteration,
@@ -266,16 +213,6 @@ class GymModeState {
     );
   }
 
-  int get totalPages {
-    // Main pages (start, session, etc.)
-    var count = pages.where((p) => p.type != PageType.set).length;
-
-    // Add all other sub pages (sets, timer, etc.)
-    count += pages.fold(0, (prev, e) => prev + e.slotPages.length);
-
-    return count;
-  }
-
   DayData get dayDataGym =>
       routine.dayDataGym.where((e) => e.iteration == iteration && e.day?.id == dayId).first;
 
@@ -283,52 +220,44 @@ class GymModeState {
     (e) => e.iteration == iteration && e.day?.id == dayId,
   );
 
-  PageEntry? getPageByIndex([int? pageIndex]) {
-    final index = pageIndex ?? currentPage;
+  ExerciseSlotEntry? getSlotByUUID(String uuid) {
+    for (final slot in exerciseSlots) {
+      if (slot.uuid == uuid) {
+        return slot;
+      }
+    }
+    return null;
+  }
 
-    for (final page in pages) {
-      for (final slotPage in page.slotPages) {
-        if (slotPage.pageIndex == index) {
-          return page;
+  SetRowEntry? getSetRowByUUID(String uuid) {
+    for (final slot in exerciseSlots) {
+      for (final row in slot.setRows) {
+        if (row.uuid == uuid) {
+          return row;
         }
       }
     }
     return null;
   }
 
-  SlotPageEntry? getSlotEntryPageByIndex([int? pageIndex]) {
-    final index = pageIndex ?? currentPage;
+  int get totalSets => exerciseSlots.fold(0, (sum, slot) => sum + slot.setRows.length);
 
-    for (final slotPage in pages.expand((p) => p.slotPages)) {
-      if (slotPage.pageIndex == index) {
-        return slotPage;
-      }
-    }
-    return null;
-  }
-
-  SlotPageEntry? getSlotPageByUUID(String uuid) {
-    for (final slotPage in pages.expand((p) => p.slotPages)) {
-      if (slotPage.uuid == uuid) {
-        return slotPage;
-      }
-    }
-    return null;
-  }
+  int get completedSets => exerciseSlots.fold(
+    0,
+    (sum, slot) => sum + slot.setRows.where((row) => row.logDone).length,
+  );
 
   double get ratioCompleted {
-    if (totalPages == 0) {
+    if (totalSets == 0) {
       return 0.0;
     }
-
-    // Note: add 1 to currentPage to make it 1-based
-    return (currentPage + 1) / totalPages;
+    return completedSets / totalSets;
   }
 
   @override
   String toString() {
     return 'GymState('
-        'currentPage: $currentPage, '
+        'exerciseSlots: ${exerciseSlots.length}, '
         'validUntil: $validUntil '
         'startTime: $startTime, '
         'showExercisePages: $showExercisePages, '

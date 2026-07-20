@@ -61,7 +61,7 @@ void main() {
       iteration: 1,
       routine: testRoutine,
     );
-    notifier.calculatePages();
+    notifier.buildWorkoutStructure();
     when(mockRepository.editLocalDrift(any)).thenAnswer(
       (_) => Future.value(testRoutine.sessions[0]),
     );
@@ -117,7 +117,7 @@ void main() {
       routine: testRoutine,
       startTime: const TimeOfDay(hour: 13, minute: 35),
     );
-    notifier.calculatePages();
+    notifier.buildWorkoutStructure();
 
     await tester.pumpWidget(renderSessionPage());
     await tester.pumpAndSettle();

@@ -22,10 +22,8 @@ import 'package:logging/logging.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:wger/core/shared_preferences.dart';
 import 'package:wger/features/exercises/models/exercise.dart';
-import 'package:wger/features/routines/models/log.dart';
 import 'package:wger/features/routines/models/routine.dart';
 import 'package:wger/features/routines/models/set_config_data.dart';
-import 'package:wger/features/routines/providers/gym_log_notifier.dart';
 import 'package:wger/features/routines/providers/gym_state.dart';
 
 part 'gym_state_notifier.g.dart';
@@ -123,200 +121,84 @@ class GymStateNotifier extends _$GymStateNotifier {
     );
   }
 
-  /// Calculates the page entries
-  void calculatePages() {
-    var pageIndex = 0;
+  /// Projects the routine's day data into the flat list of exercise
+  /// sections + set rows the active-workout scroll screen renders.
+  void buildWorkoutStructure() {
+    final List<ExerciseSlotEntry> slots = [];
 
-    final List<PageEntry> pages = [
-      // Start page
-      PageEntry(type: PageType.start, pageIndex: pageIndex),
-    ];
-
-    pageIndex++;
     for (final slotData in state.dayDataGym.slots) {
-      final slotPageIndex = pageIndex;
-      final slotEntries = <SlotPageEntry>[];
-      int setIndex = 0;
-
-      // exercise overview page
-      if (state.showExercisePages) {
-        // Add one overview page per exercise in the slot (e.g. for supersets)
-        for (final exerciseId in slotData.exerciseIds) {
-          final setConfig = slotData.setConfigs.firstWhereOrNull((c) => c.exerciseId == exerciseId);
-          if (setConfig == null) {
-            _logger.warning('Exercise with ID $exerciseId not found in slotData!!');
-            continue;
-          }
-
-          slotEntries.add(
-            SlotPageEntry(
-              type: SlotPageType.exerciseOverview,
-              setIndex: setIndex,
-              pageIndex: pageIndex,
-              setConfigData: setConfig,
-            ),
-          );
-          pageIndex++;
+      // Resolve the slot's exercises in the order they appear, deduplicated,
+      // for the section header (more than one means a superset).
+      final exercises = <Exercise>[];
+      for (final exerciseId in slotData.exerciseIds) {
+        final setConfig = slotData.setConfigs.firstWhereOrNull(
+          (c) => c.exerciseId == exerciseId,
+        );
+        if (setConfig == null) {
+          _logger.warning('Exercise with ID $exerciseId not found in slotData!!');
+          continue;
         }
+        exercises.add(setConfig.exercise);
       }
 
-      for (final config in slotData.setConfigs) {
-        // Log page
-        slotEntries.add(
-          SlotPageEntry(
-            type: SlotPageType.log,
-            setIndex: setIndex,
-            pageIndex: pageIndex,
-            setConfigData: config,
-          ),
+      // Number each exercise's sets independently ("set 2 of 4" per
+      // exercise), not globally across a superset -- more useful once every
+      // exercise gets its own section with its own set list, rather than a
+      // single flattened page sequence.
+      final setIndexByExercise = <int, int>{};
+      final setRows = slotData.setConfigs.map((config) {
+        final setIndex = setIndexByExercise.update(
+          config.exerciseId,
+          (i) => i + 1,
+          ifAbsent: () => 0,
         );
-        pageIndex++;
-        setIndex++;
+        return SetRowEntry(setIndex: setIndex, setConfigData: config);
+      }).toList();
 
-        // Timer page
-        if (state.showTimerPages) {
-          slotEntries.add(
-            SlotPageEntry(
-              type: SlotPageType.timer,
-              setIndex: setIndex,
-              pageIndex: pageIndex,
-              setConfigData: config,
-            ),
-          );
-          pageIndex++;
-        }
-      }
-
-      pages.add(
-        PageEntry(
-          type: PageType.set,
-          pageIndex: slotPageIndex,
-          slotPages: slotEntries,
-        ),
-      );
+      slots.add(ExerciseSlotEntry(exercises: exercises, setRows: setRows));
     }
 
-    // Session and summary page
-    pages.add(PageEntry(type: PageType.session, pageIndex: pageIndex));
-    pages.add(PageEntry(type: PageType.workoutSummary, pageIndex: pageIndex + 1));
-
-    state = state.copyWith(pages: pages);
-    // print(readPageStructure());
-    _logger.finer('Initialized ${state.pages.length} pages');
-  }
-
-  // Recalculates the indices of all pages
-  void recalculateIndices() {
-    var pageIndex = 0;
-    final updatedPages = <PageEntry>[];
-
-    for (final page in state.pages) {
-      final slotPageIndex = pageIndex;
-      var setIndex = 0;
-      final updatedSlotPages = <SlotPageEntry>[];
-
-      for (final slotPage in page.slotPages) {
-        updatedSlotPages.add(
-          slotPage.copyWith(
-            pageIndex: pageIndex,
-            setIndex: setIndex,
-          ),
-        );
-        setIndex++;
-        pageIndex++;
-      }
-
-      if (page.type != PageType.set) {
-        pageIndex++;
-      }
-
-      updatedPages.add(
-        page.copyWith(
-          pageIndex: slotPageIndex,
-          slotPages: updatedSlotPages,
-        ),
-      );
-    }
-
-    state = state.copyWith(pages: updatedPages);
-    // _logger.fine(readPageStructure());
-    _logger.fine('Recalculated page indices');
-  }
-
-  /// Reads the current page structure for debugging purposes
-  String readPageStructure() {
-    final List<String> out = [];
-    out.add('GymModeState structure:');
-    for (final page in state.pages) {
-      out.add('Page ${page.pageIndex}: ${page.type}');
-      for (final slotPage in page.slotPages) {
-        out.add(
-          '  SlotPage ${slotPage.pageIndex.toString().padLeft(2, ' ')} (set index ${slotPage.setIndex}): ${slotPage.type}',
-        );
-      }
-    }
-
-    return out.join('\n');
+    state = state.copyWith(exerciseSlots: slots);
+    _logger.finer('Built workout structure: ${state.exerciseSlots.length} exercise slots');
   }
 
   int initData(Routine routine, int dayId, int iteration) {
     final validUntil = state.validUntil;
-    final currentPage = state.currentPage;
 
     final shouldReset =
         (!state.isInitialized || state.isInitialized && dayId != state.dayId) ||
         validUntil.isBefore(DateTime.now());
     if (shouldReset) {
-      _logger.fine('Day ID mismatch or expired validUntil date. Resetting to page 0.');
+      _logger.fine('Day ID mismatch or expired validUntil date. Resetting.');
     }
-    final initialPage = shouldReset ? 0 : currentPage;
 
-    // set dayId and initial page
     state = state.copyWith(
       isInitialized: true,
       dayId: dayId,
       routine: routine,
       iteration: iteration,
-      currentPage: initialPage,
     );
 
-    // Calculate the pages.
     // Note that this is only done if we need to reset, otherwise we keep the
     // existing state like the exercises that have already been done
     if (shouldReset) {
-      calculatePages();
+      buildWorkoutStructure();
     }
 
-    _logger.fine('Initialized GymModeState, initialPage=$initialPage');
-    return initialPage;
-  }
-
-  void setCurrentPage(int page) {
-    state = state.copyWith(currentPage: page);
-
-    // Ensure that there is a log entry for the current slot entry
-    final slotEntryPage = state.getSlotEntryPageByIndex();
-    if (slotEntryPage == null || slotEntryPage.setConfigData == null) {
-      return;
-    }
-
-    final log = Log.fromSetConfigData(
-      slotEntryPage.setConfigData!,
-      routineId: state.routine.id,
-      iteration: state.iteration,
-    );
-    ref.read(gymLogProvider.notifier).setLog(log);
+    _logger.fine('Initialized GymModeState');
+    // Index into GymMode's fixed [StartPage, ActiveWorkoutScreen, SessionPage,
+    // WorkoutSummary] PageView: land back on the workout screen when resuming
+    // an in-progress session, otherwise start from the beginning.
+    return shouldReset ? 0 : 1;
   }
 
   void setShowExercisePages(bool value) {
     state = state.copyWith(showExercisePages: value);
-    calculatePages();
     _savePrefs();
   }
 
   void setShowTimerPages(bool value) {
     state = state.copyWith(showTimerPages: value);
-    calculatePages();
     _savePrefs();
   }
 
@@ -346,119 +228,100 @@ class GymStateNotifier extends _$GymStateNotifier {
     _savePrefs();
   }
 
-  void markSlotPageAsDone(String uuid, {required bool isDone}) {
-    final slotPage = state.getSlotPageByUUID(uuid);
-    if (slotPage == null) {
-      _logger.warning('No slot page found for UUID $uuid');
+  void markSetRowAsDone(String uuid, {required bool isDone}) {
+    final row = state.getSetRowByUUID(uuid);
+    if (row == null) {
+      _logger.warning('No set row found for UUID $uuid');
       return;
     }
 
-    final updatedSlotPage = slotPage.copyWith(logDone: isDone);
-
-    final updatedPages = state.pages.map((page) {
-      if (page.type != PageType.set) {
-        return page;
-      }
-
-      final updatedSlotPages = page.slotPages.map((sp) {
-        if (sp.uuid == uuid) {
-          return updatedSlotPage;
+    final updatedSlots = state.exerciseSlots.map((slot) {
+      final updatedRows = slot.setRows.map((r) {
+        if (r.uuid == uuid) {
+          return r.copyWith(logDone: isDone);
         }
-        return sp;
+        return r;
       }).toList();
-
-      return page.copyWith(slotPages: updatedSlotPages);
+      return slot.copyWith(setRows: updatedRows);
     }).toList();
 
-    state = state.copyWith(pages: updatedPages);
-    _logger.fine('Set logDone=$isDone for slot page UUID $uuid');
+    state = state.copyWith(exerciseSlots: updatedSlots);
+    _logger.fine('Set logDone=$isDone for set row UUID $uuid');
   }
 
   void replaceExercises(
-    String pageEntryUUID, {
+    String slotUUID, {
     required int originalExerciseId,
     required Exercise newExercise,
   }) {
-    final updatedPages = state.pages.map((page) {
-      if (page.type != PageType.set) {
-        return page;
+    final updatedSlots = state.exerciseSlots.map((slot) {
+      if (slot.uuid != slotUUID) {
+        return slot;
       }
 
-      if (page.uuid != pageEntryUUID) {
-        return page;
-      }
+      final updatedExercises = slot.exercises
+          .map((e) => e.id == originalExerciseId ? newExercise : e)
+          .toList();
 
-      final updatedSlotPages = page.slotPages.map((slotPage) {
-        if (slotPage.setConfigData != null &&
-            slotPage.setConfigData!.exercise.id == originalExerciseId) {
-          final updatedSetConfigData = slotPage.setConfigData!.copyWith(
+      final updatedRows = slot.setRows.map((row) {
+        if (row.setConfigData.exercise.id == originalExerciseId) {
+          final updatedSetConfigData = row.setConfigData.copyWith(
             exerciseId: newExercise.id,
             exercise: newExercise,
           );
-          return slotPage.copyWith(setConfigData: updatedSetConfigData);
+          return row.copyWith(setConfigData: updatedSetConfigData);
         }
-        return slotPage;
+        return row;
       }).toList();
 
-      return page.copyWith(slotPages: updatedSlotPages);
+      return slot.copyWith(exercises: updatedExercises, setRows: updatedRows);
     }).toList();
 
     // replace and update new immutable routine instance
     final updatedRoutine = state.routine.replaceExercise(originalExerciseId, newExercise);
     state = state.copyWith(
-      pages: updatedPages,
+      exerciseSlots: updatedSlots,
       routine: updatedRoutine,
     );
     _logger.fine('Replaced exercise $originalExerciseId with ${newExercise.id}');
   }
 
-  void addExerciseAfterPage(
-    String pageEntryUUID, {
+  void addExerciseAfterSlot(
+    String slotUUID, {
     required Exercise newExercise,
   }) {
-    final List<PageEntry> pages = [];
-    for (final page in state.pages) {
-      pages.add(page);
+    final List<ExerciseSlotEntry> slots = [];
+    for (final slot in state.exerciseSlots) {
+      slots.add(slot);
 
-      if (page.uuid == pageEntryUUID) {
-        final setConfigData = page.slotPages.first.setConfigData!;
+      if (slot.uuid == slotUUID) {
+        final referenceSetConfig = slot.setRows.first.setConfigData;
 
-        final List<SlotPageEntry> newSlotPages = [];
-        for (var i = 1; i <= 4; i++) {
-          newSlotPages.add(
-            SlotPageEntry(
-              type: SlotPageType.log,
-              pageIndex: 1,
-              setIndex: 0,
-              setConfigData: SetConfigData(
-                textRepr: '-/-',
-                exerciseId: newExercise.id,
-                exercise: newExercise,
-                slotEntryId: setConfigData.slotEntryId,
-              ),
+        final newRows = List.generate(4, (i) {
+          return SetRowEntry(
+            setIndex: i,
+            setConfigData: SetConfigData(
+              textRepr: '-/-',
+              exerciseId: newExercise.id,
+              exercise: newExercise,
+              slotEntryId: referenceSetConfig.slotEntryId,
             ),
           );
-        }
+        });
 
-        final newPage = PageEntry(type: PageType.set, pageIndex: 1, slotPages: newSlotPages);
-
-        pages.add(newPage);
+        slots.add(ExerciseSlotEntry(exercises: [newExercise], setRows: newRows));
       }
     }
 
-    state = state.copyWith(
-      pages: pages,
-    );
-
-    recalculateIndices();
+    state = state.copyWith(exerciseSlots: slots);
+    _logger.fine('Added exercise ${newExercise.id} after slot $slotUUID');
   }
 
   void clear() {
     _logger.fine('Clearing state');
     state = state.copyWith(
       isInitialized: false,
-      pages: [],
-      currentPage: 0,
+      exerciseSlots: [],
 
       validUntil: clock.now().add(DEFAULT_DURATION),
       startTime: null,
