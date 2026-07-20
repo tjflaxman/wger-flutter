@@ -20,7 +20,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:logging/logging.dart';
 import 'package:wger/features/exercises/widgets/autocompleter.dart';
-import 'package:wger/features/routines/providers/gym_state.dart';
 import 'package:wger/features/routines/providers/gym_state_notifier.dart';
 import 'package:wger/l10n/generated/app_localizations.dart';
 
@@ -29,21 +28,18 @@ import 'package:wger/l10n/generated/app_localizations.dart';
 /// (NavigationTab) -- that's gone now that the whole workout is visible by
 /// scrolling on one screen, so there's nothing left to jump to.
 class WorkoutMenu extends StatelessWidget {
-  final PageController _controller;
-
-  const WorkoutMenu(this._controller, {super.key});
+  const WorkoutMenu({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return ProgressionTab(_controller);
+    return const ProgressionTab();
   }
 }
 
 class ProgressionTab extends ConsumerStatefulWidget {
   final _logger = Logger('ProgressionTab');
-  final PageController _controller;
 
-  ProgressionTab(this._controller, {super.key});
+  ProgressionTab({super.key});
 
   @override
   ConsumerState<ProgressionTab> createState() => _ProgressionTabState();
@@ -350,7 +346,7 @@ class WorkoutMenuDialog extends ConsumerWidget {
       contentPadding: EdgeInsets.zero,
       content: SizedBox(
         width: double.maxFinite,
-        child: WorkoutMenu(controller),
+        child: const WorkoutMenu(),
       ),
       actions: [
         ?endWorkoutButton,

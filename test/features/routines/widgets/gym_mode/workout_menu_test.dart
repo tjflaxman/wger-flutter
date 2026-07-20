@@ -54,7 +54,7 @@ void main() {
         localizationsDelegates: AppLocalizations.localizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
         home: Scaffold(
-          body: ProgressionTab(PageController()),
+          body: ProgressionTab(),
         ),
       ),
     );
