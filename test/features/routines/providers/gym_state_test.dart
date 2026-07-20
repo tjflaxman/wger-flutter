@@ -120,6 +120,27 @@ void main() {
     });
   });
 
+  group('GymStateNotifier.addSetToSlot', () {
+    test('Appends a set templated off the last one, pre-filled with its values', () {
+      // Arrange
+      final slot = notifier.state.exerciseSlots[0];
+      final lastRow = slot.setRows.last;
+      notifier.updateSetRowValues(lastRow.uuid, weight: 123, reps: 7);
+
+      // Act
+      notifier.addSetToSlot(slot.uuid);
+
+      // Assert
+      final updatedSlot = notifier.state.getSlotByUUID(slot.uuid)!;
+      expect(updatedSlot.setRows.length, slot.setRows.length + 1);
+      final newRow = updatedSlot.setRows.last;
+      expect(newRow.setIndex, lastRow.setIndex + 1);
+      expect(newRow.displayWeight, 123);
+      expect(newRow.displayReps, 7);
+      expect(newRow.logDone, false);
+    });
+  });
+
   group('GymStateNotifier.addExerciseAfterSlot', () {
     test('Inserts a new slot with 4 blank sets right after the given one', () {
       // Arrange

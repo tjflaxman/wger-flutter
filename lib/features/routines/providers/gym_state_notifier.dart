@@ -263,6 +263,39 @@ class GymStateNotifier extends _$GymStateNotifier {
     _logger.fine('Set logDone=$isDone for set row UUID $uuid');
   }
 
+  /// Appends one more set to [slotUuid], templated off the last set for
+  /// that exercise (same planned config, pre-filled with its weight/reps)
+  /// -- lets the user log an extra set beyond what the routine planned.
+  void addSetToSlot(String slotUuid) {
+    final slot = state.getSlotByUUID(slotUuid);
+    if (slot == null || slot.setRows.isEmpty) {
+      _logger.warning('No slot/sets found for UUID $slotUuid');
+      return;
+    }
+
+    final lastRow = slot.setRows.last;
+    final nextIndexForExercise = slot.setRows
+        .where((r) => r.setConfigData.exerciseId == lastRow.setConfigData.exerciseId)
+        .length;
+
+    final newRow = SetRowEntry(
+      setIndex: nextIndexForExercise,
+      setConfigData: lastRow.setConfigData,
+      enteredWeight: lastRow.displayWeight,
+      enteredReps: lastRow.displayReps,
+    );
+
+    final updatedSlots = state.exerciseSlots.map((s) {
+      if (s.uuid != slotUuid) {
+        return s;
+      }
+      return s.copyWith(setRows: [...s.setRows, newRow]);
+    }).toList();
+
+    state = state.copyWith(exerciseSlots: updatedSlots);
+    _logger.fine('Added a set to slot $slotUuid');
+  }
+
   void updateSetRowValues(String uuid, {num? weight, num? reps}) {
     final updatedSlots = state.exerciseSlots.map((slot) {
       final updatedRows = slot.setRows.map((r) {

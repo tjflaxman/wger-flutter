@@ -179,6 +179,15 @@ class _ExerciseSectionWidgetState extends ConsumerState<ExerciseSectionWidget> {
               slotUuid: slot.uuid,
               setRowUuid: row.uuid,
             ),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton.icon(
+              key: ValueKey('add-set-${slot.uuid}'),
+              onPressed: () => ref.read(gymStateProvider.notifier).addSetToSlot(slot.uuid),
+              icon: const Icon(Icons.add, size: 18),
+              label: const Text('Add set'),
+            ),
+          ),
           const SizedBox(height: AppSpacing.sm),
         ],
       ),
