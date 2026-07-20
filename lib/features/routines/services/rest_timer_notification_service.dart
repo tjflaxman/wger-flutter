@@ -75,12 +75,25 @@ class FlutterRestTimerNotificationService implements RestTimerNotificationServic
     _initialized = true;
   }
 
+  AndroidFlutterLocalNotificationsPlugin? get _android =>
+      _plugin.resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
+
   @override
   Future<bool> requestPermission() async {
-    final granted = await _plugin
-        .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
-        ?.requestNotificationsPermission();
-    return granted ?? false;
+    final notificationsGranted = await _android?.requestNotificationsPermission() ?? false;
+
+    // Separate from POST_NOTIFICATIONS: without this, Android silently
+    // downgrades scheduling to "inexact", which it's free to delay by
+    // several minutes once the screen is off -- exactly the case this
+    // timer needs to be reliable for. There's no in-app prompt for this;
+    // requestExactAlarmsPermission() hands off to the system's "Alarms &
+    // reminders" settings screen for the user to grant it.
+    final canScheduleExact = await _android?.canScheduleExactNotifications() ?? false;
+    if (!canScheduleExact) {
+      await _android?.requestExactAlarmsPermission();
+    }
+
+    return notificationsGranted;
   }
 
   @override
@@ -103,26 +116,22 @@ class FlutterRestTimerNotificationService implements RestTimerNotificationServic
 
     final scheduledDate = tz.TZDateTime.from(endTime, tz.local);
 
-    try {
-      await _plugin.zonedSchedule(
-        id: id,
-        title: 'Rest over',
-        body: 'Time for your next set',
-        scheduledDate: scheduledDate,
-        notificationDetails: details,
-        androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
-      );
-    } catch (e) {
-      _logger.warning('Exact alarm scheduling failed, falling back to inexact: $e');
-      await _plugin.zonedSchedule(
-        id: id,
-        title: 'Rest over',
-        body: 'Time for your next set',
-        scheduledDate: scheduledDate,
-        notificationDetails: details,
-        androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
-      );
-    }
+    // Checked rather than try/catch around exactAllowWhileIdle: the plugin
+    // doesn't reliably throw when exact-alarm permission is missing, it can
+    // just silently schedule an inexact alarm under the hood instead.
+    final canScheduleExact = await _android?.canScheduleExactNotifications() ?? false;
+    final mode = canScheduleExact
+        ? AndroidScheduleMode.exactAllowWhileIdle
+        : AndroidScheduleMode.inexactAllowWhileIdle;
+
+    await _plugin.zonedSchedule(
+      id: id,
+      title: 'Rest over',
+      body: 'Time for your next set',
+      scheduledDate: scheduledDate,
+      notificationDetails: details,
+      androidScheduleMode: mode,
+    );
   }
 
   @override

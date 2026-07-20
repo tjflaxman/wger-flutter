@@ -107,6 +107,11 @@ class _TimerCountdownWidgetState extends ConsumerState<TimerCountdownWidget> {
   // Only needs to be unique among notifications scheduled concurrently by
   // this app, which is at most one rest timer at a time.
   late final int _notificationId;
+  // Captured at initState time: ref.read() is not safe to call from
+  // dispose() (BuildContext may already be torn down, e.g. when the
+  // PageView unmounts several pages at once), so dispose() must not touch
+  // ref at all.
+  late final RestTimerNotificationService _notificationService;
   bool _notificationScheduled = false;
   bool _hasFiredLocalAlert = false;
 
@@ -115,6 +120,7 @@ class _TimerCountdownWidgetState extends ConsumerState<TimerCountdownWidget> {
     super.initState();
     _endTime = DateTime.now().add(Duration(seconds: widget._seconds));
     _notificationId = DateTime.now().millisecondsSinceEpoch.remainder(1 << 31);
+    _notificationService = ref.read(restTimerNotificationServiceProvider);
 
     // Drives the once-per-second rebuild; the ring's own motion between
     // ticks comes from the TweenAnimationBuilder in build() below, not from
@@ -132,10 +138,7 @@ class _TimerCountdownWidgetState extends ConsumerState<TimerCountdownWidget> {
     final gymState = ref.read(gymStateProvider);
     if (gymState.alertOnCountdownEnd) {
       _notificationScheduled = true;
-      ref.read(restTimerNotificationServiceProvider).scheduleRestEnd(
-            id: _notificationId,
-            endTime: _endTime,
-          );
+      _notificationService.scheduleRestEnd(id: _notificationId, endTime: _endTime);
     }
   }
 
@@ -145,7 +148,7 @@ class _TimerCountdownWidgetState extends ConsumerState<TimerCountdownWidget> {
     // Covers skipping past the rest early: don't let a stale notification
     // fire for a countdown the user already moved on from.
     if (_notificationScheduled) {
-      ref.read(restTimerNotificationServiceProvider).cancel(_notificationId);
+      _notificationService.cancel(_notificationId);
     }
     super.dispose();
   }
