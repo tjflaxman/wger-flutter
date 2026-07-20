@@ -191,6 +191,42 @@ class _GymModeOptionsState extends ConsumerState<GymModeOptions> {
                         value: gymState.showDistinctLogs,
                         onChanged: (value) => gymNotifier.setShowDistinctLogs(value),
                       ),
+
+                      const Divider(),
+                      // Temporary debug aid while the rest-timer notification
+                      // reliability work is still being verified on-device --
+                      // there's no log access to a sideloaded phone, so this
+                      // is the fastest way to see what the plugin is actually
+                      // doing.
+                      ListTile(
+                        key: const ValueKey('gym-mode-test-notification'),
+                        leading: const Icon(Icons.notifications_active_outlined),
+                        title: const Text('Test rest-timer notification'),
+                        subtitle: const Text(
+                          'Fires an immediate test + a 10s scheduled test, '
+                          'and reports permission state',
+                        ),
+                        onTap: () async {
+                          final service = ref.read(restTimerNotificationServiceProvider);
+                          final report = await service.diagnose();
+                          if (!context.mounted) {
+                            return;
+                          }
+                          showDialog(
+                            context: context,
+                            builder: (ctx) => AlertDialog(
+                              title: const Text('Notification diagnostic'),
+                              content: SelectableText(report),
+                              actions: [
+                                TextButton(
+                                  onPressed: () => Navigator.of(ctx).pop(),
+                                  child: const Text('Close'),
+                                ),
+                              ],
+                            ),
+                          );
+                        },
+                      ),
                     ],
                   ),
                 ),

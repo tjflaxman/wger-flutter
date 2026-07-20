@@ -43,6 +43,12 @@ abstract class RestTimerNotificationService {
   Future<void> scheduleRestEnd({required int id, required DateTime endTime});
 
   Future<void> cancel(int id);
+
+  /// Runs through permission checks and an immediate + a scheduled test
+  /// notification, returning a human-readable report. Exists because there's
+  /// no log access to a sideloaded device -- this turns the phone itself
+  /// into the diagnostic.
+  Future<String> diagnose();
 }
 
 class FlutterRestTimerNotificationService implements RestTimerNotificationService {
@@ -152,6 +158,49 @@ class FlutterRestTimerNotificationService implements RestTimerNotificationServic
 
   @override
   Future<void> cancel(int id) => _plugin.cancel(id: id);
+
+  @override
+  Future<String> diagnose() async {
+    final buffer = StringBuffer();
+    buffer.writeln('initialized: $_initialized');
+
+    final notificationsEnabled = await _android?.areNotificationsEnabled();
+    buffer.writeln('areNotificationsEnabled: $notificationsEnabled');
+
+    final canScheduleExact = await _android?.canScheduleExactNotifications();
+    buffer.writeln('canScheduleExactNotifications: $canScheduleExact');
+
+    const androidDetails = AndroidNotificationDetails(
+      _channelId,
+      _channelName,
+      channelDescription: _channelDescription,
+      importance: Importance.max,
+      priority: Priority.high,
+      playSound: true,
+      enableVibration: true,
+    );
+
+    try {
+      await _plugin.show(
+        id: 999999,
+        title: 'Immediate test',
+        body: 'If you see this, basic delivery works',
+        notificationDetails: const NotificationDetails(android: androidDetails),
+      );
+      buffer.writeln('show(): OK -- check the notification tray now');
+    } catch (e) {
+      buffer.writeln('show(): THREW: $e');
+    }
+
+    try {
+      await scheduleRestEnd(id: 999998, endTime: DateTime.now().add(const Duration(seconds: 10)));
+      buffer.writeln('scheduleRestEnd(+10s): OK -- wait 10s and check the tray');
+    } catch (e) {
+      buffer.writeln('scheduleRestEnd(+10s): THREW: $e');
+    }
+
+    return buffer.toString();
+  }
 }
 
 /// Used in widget tests, where no native plugin channels are available.
@@ -169,6 +218,9 @@ class NoopRestTimerNotificationService implements RestTimerNotificationService {
 
   @override
   Future<void> cancel(int id) async {}
+
+  @override
+  Future<String> diagnose() async => 'No-op service (test environment)';
 }
 
 final restTimerNotificationServiceProvider = Provider<RestTimerNotificationService>((ref) {
