@@ -155,7 +155,21 @@ class GymStateNotifier extends _$GymStateNotifier {
         return SetRowEntry(setIndex: setIndex, setConfigData: config);
       }).toList();
 
-      slots.add(ExerciseSlotEntry(exercises: exercises, setRows: setRows));
+      // Seed this exercise's rest duration from its own configured rest time
+      // if the routine specifies one, otherwise the user's global default.
+      final configuredRest = slotData.setConfigs
+          .map((c) => c.restTime)
+          .firstWhereOrNull((r) => r != null);
+      final restDurationSeconds =
+          configuredRest?.toInt() ?? state.countdownDuration.inSeconds;
+
+      slots.add(
+        ExerciseSlotEntry(
+          exercises: exercises,
+          setRows: setRows,
+          restDurationSeconds: restDurationSeconds,
+        ),
+      );
     }
 
     state = state.copyWith(exerciseSlots: slots);
@@ -249,6 +263,78 @@ class GymStateNotifier extends _$GymStateNotifier {
     _logger.fine('Set logDone=$isDone for set row UUID $uuid');
   }
 
+  void updateSetRowValues(String uuid, {num? weight, num? reps}) {
+    final updatedSlots = state.exerciseSlots.map((slot) {
+      final updatedRows = slot.setRows.map((r) {
+        if (r.uuid == uuid) {
+          return r.copyWith(enteredWeight: weight, enteredReps: reps);
+        }
+        return r;
+      }).toList();
+      return slot.copyWith(setRows: updatedRows);
+    }).toList();
+
+    state = state.copyWith(exerciseSlots: updatedSlots);
+  }
+
+  void setSlotRestDuration(String slotUuid, int seconds) {
+    final updatedSlots = state.exerciseSlots.map((slot) {
+      if (slot.uuid != slotUuid) {
+        return slot;
+      }
+      return slot.copyWith(restDurationSeconds: seconds);
+    }).toList();
+
+    state = state.copyWith(exerciseSlots: updatedSlots);
+    _logger.fine('Set rest duration for slot $slotUuid to ${seconds}s');
+  }
+
+  /// Starts (or restarts) the rest countdown for [slotUuid], using that
+  /// exercise's configured restDurationSeconds.
+  void startRest(String slotUuid) {
+    final slot = state.getSlotByUUID(slotUuid);
+    if (slot == null) {
+      _logger.warning('No slot found for UUID $slotUuid');
+      return;
+    }
+
+    final endTime = clock.now().add(Duration(seconds: slot.restDurationSeconds));
+    final updatedSlots = state.exerciseSlots.map((s) {
+      if (s.uuid != slotUuid) {
+        return s;
+      }
+      return s.copyWith(restEndTime: endTime);
+    }).toList();
+
+    state = state.copyWith(exerciseSlots: updatedSlots);
+  }
+
+  /// Adds (or removes, for a negative value) time to an in-progress rest
+  /// period. No-op if [slotUuid] isn't currently resting.
+  void extendRest(String slotUuid, int additionalSeconds) {
+    final updatedSlots = state.exerciseSlots.map((s) {
+      if (s.uuid != slotUuid || s.restEndTime == null) {
+        return s;
+      }
+      return s.copyWith(restEndTime: s.restEndTime!.add(Duration(seconds: additionalSeconds)));
+    }).toList();
+
+    state = state.copyWith(exerciseSlots: updatedSlots);
+  }
+
+  /// Ends the rest period for [slotUuid], whether because it finished
+  /// naturally or the user skipped it.
+  void endRest(String slotUuid) {
+    final updatedSlots = state.exerciseSlots.map((s) {
+      if (s.uuid != slotUuid) {
+        return s;
+      }
+      return s.copyWith(clearRestEndTime: true);
+    }).toList();
+
+    state = state.copyWith(exerciseSlots: updatedSlots);
+  }
+
   void replaceExercises(
     String slotUUID, {
     required int originalExerciseId,
@@ -309,7 +395,13 @@ class GymStateNotifier extends _$GymStateNotifier {
           );
         });
 
-        slots.add(ExerciseSlotEntry(exercises: [newExercise], setRows: newRows));
+        slots.add(
+          ExerciseSlotEntry(
+            exercises: [newExercise],
+            setRows: newRows,
+            restDurationSeconds: state.countdownDuration.inSeconds,
+          ),
+        );
       }
     }
 

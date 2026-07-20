@@ -54,10 +54,19 @@ class SetRowEntry {
 
   final SetConfigData setConfigData;
 
+  /// Weight/reps actually entered for this set, distinct from
+  /// setConfigData's planned/target values. Null means "use the plan's
+  /// value as the default" -- the UI falls back to setConfigData.weight /
+  /// .repetitions until the user edits the field.
+  final num? enteredWeight;
+  final num? enteredReps;
+
   SetRowEntry({
     required this.setIndex,
     required this.setConfigData,
     this.logDone = false,
+    this.enteredWeight,
+    this.enteredReps,
     String? uuid,
   }) : uuid = uuid ?? uuidV4();
 
@@ -66,14 +75,22 @@ class SetRowEntry {
     int? setIndex,
     SetConfigData? setConfigData,
     bool? logDone,
+    num? enteredWeight,
+    num? enteredReps,
   }) {
     return SetRowEntry(
       uuid: uuid ?? this.uuid,
       setIndex: setIndex ?? this.setIndex,
       setConfigData: setConfigData ?? this.setConfigData,
       logDone: logDone ?? this.logDone,
+      enteredWeight: enteredWeight ?? this.enteredWeight,
+      enteredReps: enteredReps ?? this.enteredReps,
     );
   }
+
+  num? get displayWeight => enteredWeight ?? setConfigData.weight;
+
+  num? get displayReps => enteredReps ?? setConfigData.repetitions;
 
   @override
   String toString() =>
@@ -90,9 +107,20 @@ class ExerciseSlotEntry {
   final List<Exercise> exercises;
   final List<SetRowEntry> setRows;
 
+  /// How long to rest after a set in this exercise, in seconds. Seeded from
+  /// the routine's configured rest time (if any) or the global default, and
+  /// adjustable per-exercise from the active-workout screen (tap to open a
+  /// duration picker), mirroring Hevy's per-exercise rest timer.
+  final int restDurationSeconds;
+
+  /// When set, a rest period is actively counting down to this time.
+  final DateTime? restEndTime;
+
   ExerciseSlotEntry({
     required this.exercises,
     this.setRows = const [],
+    required this.restDurationSeconds,
+    this.restEndTime,
     String? uuid,
   }) : uuid = uuid ?? uuidV4();
 
@@ -100,13 +128,20 @@ class ExerciseSlotEntry {
     String? uuid,
     List<Exercise>? exercises,
     List<SetRowEntry>? setRows,
+    int? restDurationSeconds,
+    DateTime? restEndTime,
+    bool clearRestEndTime = false,
   }) {
     return ExerciseSlotEntry(
       uuid: uuid ?? this.uuid,
       exercises: exercises ?? this.exercises,
       setRows: setRows ?? this.setRows,
+      restDurationSeconds: restDurationSeconds ?? this.restDurationSeconds,
+      restEndTime: clearRestEndTime ? null : (restEndTime ?? this.restEndTime),
     );
   }
+
+  bool get isResting => restEndTime != null;
 
   bool get allLogsDone => setRows.isNotEmpty && setRows.every((row) => row.logDone);
 

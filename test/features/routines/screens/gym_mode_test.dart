@@ -30,6 +30,7 @@ import 'package:wger/core/shared_preferences.dart';
 import 'package:wger/core/widgets/error.dart';
 import 'package:wger/features/exercises/providers/exercise_repository.dart';
 import 'package:wger/features/exercises/providers/exercises_notifier.dart';
+import 'package:wger/features/exercises/widgets/exercises.dart';
 import 'package:wger/features/routines/models/repetition_unit.dart';
 import 'package:wger/features/routines/models/session.dart';
 import 'package:wger/features/routines/models/weight_unit.dart';
@@ -107,6 +108,9 @@ void main() {
       final exerciseId = invocation.namedArguments[#exerciseId] as int;
       return Stream.value(testRoutine.filterLogsByExercise(exerciseId));
     });
+
+    // Completing a set in the active-workout screen saves a Log entry.
+    when(mockLogRepo.addLocalDrift(any)).thenAnswer((_) async {});
   });
 
   Widget renderGymMode({
@@ -181,26 +185,33 @@ void main() {
         await tester.pumpAndSettle();
 
         //
-        // Active workout screen: both exercises show as collapsed sections
+        // Active workout screen: both exercises show as sections with their
+        // full set table already visible (no expand needed to log a set --
+        // only the exercise instructions/images are collapsed by default).
         //
         expect(find.byType(ActiveWorkoutScreen), findsOneWidget);
         expect(find.byType(ExerciseSectionWidget), findsNWidgets(2));
         expect(find.text('Bench press'), findsOneWidget);
         expect(find.text('Side raises'), findsOneWidget);
         expect(find.text('0/3 sets'), findsNWidgets(2));
-        // Set rows aren't visible until a section is expanded.
-        expect(find.byType(SetRowWidget), findsNothing);
+        expect(find.byType(SetRowWidget), findsNWidgets(6), reason: '3 sets x 2 exercises');
+        expect(find.byType(Checkbox), findsNWidgets(6));
+        // Exercise instructions are collapsed by default.
+        expect(find.byType(ExerciseDetail), findsNothing);
 
-        // Expand the "Bench press" section and confirm its 3 sets appear.
-        await tester.tap(find.text('Bench press'));
+        // Expand the "Bench press" section's instructions via its info toggle.
+        await tester.tap(find.byIcon(Icons.info_outline).first);
         await tester.pumpAndSettle();
-        expect(find.byType(SetRowWidget), findsNWidgets(3));
-        expect(find.text('3x100kg'), findsNWidgets(3), reason: 'textReprWithType per set');
+        expect(find.byType(ExerciseDetail), findsOneWidget);
 
-        // Collapse it again before moving on.
-        await tester.tap(find.text('Bench press'));
+        // Complete the first set: the rest timer for that exercise should
+        // start automatically.
+        expect(find.textContaining('Rest:'), findsNWidgets(2), reason: 'both exercises idle');
+        await tester.tap(find.byType(Checkbox).first);
         await tester.pumpAndSettle();
-        expect(find.byType(SetRowWidget), findsNothing);
+        expect(find.text('0/3 sets'), findsOneWidget, reason: 'one exercise now has a set done');
+        expect(find.text('1/3 sets'), findsOneWidget);
+        expect(find.textContaining('Rest:'), findsOneWidget, reason: 'the other exercise is idle');
 
         // Finish the workout.
         await tester.tap(find.byKey(const ValueKey('finish-workout-button')));

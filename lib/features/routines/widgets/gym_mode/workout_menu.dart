@@ -344,9 +344,9 @@ class WorkoutMenuDialog extends ConsumerWidget {
         textAlign: TextAlign.center,
       ),
       contentPadding: EdgeInsets.zero,
-      content: SizedBox(
+      content: const SizedBox(
         width: double.maxFinite,
-        child: const WorkoutMenu(),
+        child: WorkoutMenu(),
       ),
       actions: [
         ?endWorkoutButton,
