@@ -297,7 +297,7 @@ class _SetRowWidgetState extends ConsumerState<SetRowWidget> {
               distinct: gymState.showDistinctLogs,
             ),
           );
-    final previousLog = pastLogs.valueOrNull?.firstOrNull;
+    final previousLog = pastLogs.value?.firstOrNull;
     final previousText = previousLog == null
         ? '-'
         : '${previousLog.weight ?? '-'}×${previousLog.repetitions ?? '-'}';
