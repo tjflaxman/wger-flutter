@@ -32,7 +32,7 @@ class WorkoutMenu extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const ProgressionTab();
+    return ProgressionTab();
   }
 }
 
