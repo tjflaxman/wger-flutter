@@ -16,6 +16,8 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+import 'dart:async';
+
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_timezone/flutter_timezone.dart';
@@ -23,11 +25,25 @@ import 'package:logging/logging.dart';
 import 'package:timezone/data/latest_all.dart' as tz_data;
 import 'package:timezone/timezone.dart' as tz;
 
+enum RestTimerActionType { add15, skip }
+
+/// A +15s/skip tap on the live countdown notification. [slotUuid] comes back
+/// as the notification's payload, since the service itself has no notion of
+/// exercise slots -- routing the action to gym state is the caller's job.
+class RestTimerAction {
+  final String slotUuid;
+  final RestTimerActionType type;
+
+  const RestTimerAction(this.slotUuid, this.type);
+}
+
 /// Fires a one-shot local notification (sound + vibration) when a rest-timer
 /// countdown ends, so the alert reaches the user even if the app is
 /// backgrounded, the screen is locked, or the app has been killed -- none of
 /// which the previous foreground-only HapticFeedback/SystemSound combo could
-/// do. Abstracted behind an interface so widget tests (which have no native
+/// do. Also shows a live, lock-screen-visible countdown while resting
+/// (Android's Chronometer notification style), with +15s/skip actions.
+/// Abstracted behind an interface so widget tests (which have no native
 /// plugin channels available) can supply a no-op fake instead of hitting the
 /// real plugin.
 abstract class RestTimerNotificationService {
@@ -42,7 +58,24 @@ abstract class RestTimerNotificationService {
   /// targets the right notification.
   Future<void> scheduleRestEnd({required int id, required DateTime endTime});
 
+  /// Shows a live-updating countdown notification (no sound/vibration of its
+  /// own -- that's what [scheduleRestEnd] is for) with +15s/skip actions,
+  /// visible on the lock screen while [slotUuid]'s rest period is active.
+  /// Uses the same [id] as the paired [scheduleRestEnd] call so the eventual
+  /// zero-alert naturally replaces it, and a single [cancel] removes both.
+  Future<void> showLiveCountdown({
+    required int id,
+    required String slotUuid,
+    required DateTime endTime,
+  });
+
   Future<void> cancel(int id);
+
+  /// Fires when the user taps +15s/skip on a live countdown notification
+  /// while the app is running in the foreground or background (but not
+  /// fully killed -- see onDidReceiveBackgroundNotificationResponse for what
+  /// that would additionally need, deliberately not implemented yet).
+  Stream<RestTimerAction> get actions;
 
   /// Runs through permission checks and an immediate + a scheduled test
   /// notification, returning a human-readable report. Exists because there's
@@ -56,10 +89,38 @@ class FlutterRestTimerNotificationService implements RestTimerNotificationServic
   static const _channelName = 'Rest timer';
   static const _channelDescription = 'Alerts when a rest-between-sets countdown ends';
 
+  // Separate from the alert channel above because Android locks a channel's
+  // importance/sound in at creation time and never lets a single
+  // notification override it -- the live countdown needs to be quiet when it
+  // first appears (importance/sound belong to the zero-alert, not to
+  // starting a rest period), which isn't possible on the same channel.
+  static const _ongoingChannelId = 'rest_timer_ongoing';
+  static const _ongoingChannelName = 'Rest timer (in progress)';
+  static const _ongoingChannelDescription = 'Live countdown while resting between sets';
+
+  static const _addFifteenActionId = 'rest_timer_add15';
+  static const _skipActionId = 'rest_timer_skip';
+
   final _logger = Logger('RestTimerNotificationService');
   final _plugin = FlutterLocalNotificationsPlugin();
+  final _actionsController = StreamController<RestTimerAction>.broadcast();
   bool _initialized = false;
   String? _timezoneError;
+
+  @override
+  Stream<RestTimerAction> get actions => _actionsController.stream;
+
+  void _onNotificationResponse(NotificationResponse response) {
+    final slotUuid = response.payload;
+    if (slotUuid == null || slotUuid.isEmpty) {
+      return;
+    }
+    if (response.actionId == _addFifteenActionId) {
+      _actionsController.add(RestTimerAction(slotUuid, RestTimerActionType.add15));
+    } else if (response.actionId == _skipActionId) {
+      _actionsController.add(RestTimerAction(slotUuid, RestTimerActionType.skip));
+    }
+  }
 
   @override
   Future<void> init() async {
@@ -78,7 +139,13 @@ class FlutterRestTimerNotificationService implements RestTimerNotificationServic
 
     const androidSettings = AndroidInitializationSettings('@drawable/ic_launcher_foreground');
     const initSettings = InitializationSettings(android: androidSettings);
-    await _plugin.initialize(settings: initSettings);
+    // Foreground/backgrounded (not fully killed) action taps only -- see the
+    // interface doc on `actions` for why a killed-app entry point is out of
+    // scope for now.
+    await _plugin.initialize(
+      settings: initSettings,
+      onDidReceiveNotificationResponse: _onNotificationResponse,
+    );
 
     // Explicit rather than relying on implicit on-demand creation: this
     // notification is delivered later via a system alarm broadcast, not
@@ -93,6 +160,16 @@ class FlutterRestTimerNotificationService implements RestTimerNotificationServic
         importance: Importance.max,
         playSound: true,
         enableVibration: true,
+      ),
+    );
+    await _android?.createNotificationChannel(
+      const AndroidNotificationChannel(
+        _ongoingChannelId,
+        _ongoingChannelName,
+        description: _ongoingChannelDescription,
+        importance: Importance.low,
+        playSound: false,
+        enableVibration: false,
       ),
     );
 
@@ -155,6 +232,50 @@ class FlutterRestTimerNotificationService implements RestTimerNotificationServic
       scheduledDate: scheduledDate,
       notificationDetails: details,
       androidScheduleMode: mode,
+    );
+  }
+
+  @override
+  Future<void> showLiveCountdown({
+    required int id,
+    required String slotUuid,
+    required DateTime endTime,
+  }) async {
+    if (!_initialized) {
+      _logger.warning('showLiveCountdown called before init(), skipping');
+      return;
+    }
+
+    final androidDetails = AndroidNotificationDetails(
+      _ongoingChannelId,
+      _ongoingChannelName,
+      channelDescription: _ongoingChannelDescription,
+      ongoing: true,
+      autoCancel: false,
+      onlyAlertOnce: true,
+      usesChronometer: true,
+      chronometerCountDown: true,
+      showWhen: true,
+      when: endTime.millisecondsSinceEpoch,
+      actions: const [
+        // Re-posted with a new `when:` right after handling the tap (see
+        // ActiveWorkoutScreen's action-stream listener), so keep this
+        // instance alive rather than let the OS auto-dismiss it first.
+        AndroidNotificationAction(_addFifteenActionId, '+15s', cancelNotification: false),
+        AndroidNotificationAction(_skipActionId, 'Skip'),
+      ],
+    );
+    final details = NotificationDetails(android: androidDetails);
+
+    // Same id as scheduleRestEnd()'s call for this slot: when that alarm
+    // fires, its notification (different channel, actually alerts) replaces
+    // this one outright, so there's nothing separate to clean up at zero --
+    // only cancel() for an early skip.
+    await _plugin.show(
+      id: id,
+      title: 'Resting',
+      notificationDetails: details,
+      payload: slotUuid,
     );
   }
 
@@ -242,7 +363,17 @@ class NoopRestTimerNotificationService implements RestTimerNotificationService {
   Future<void> scheduleRestEnd({required int id, required DateTime endTime}) async {}
 
   @override
+  Future<void> showLiveCountdown({
+    required int id,
+    required String slotUuid,
+    required DateTime endTime,
+  }) async {}
+
+  @override
   Future<void> cancel(int id) async {}
+
+  @override
+  Stream<RestTimerAction> get actions => const Stream.empty();
 
   @override
   Future<String> diagnose() async => 'No-op service (test environment)';

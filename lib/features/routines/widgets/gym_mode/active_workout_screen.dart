@@ -37,14 +37,63 @@ import 'package:wger/theme/theme.dart';
 /// routine as a section with an always-visible set table (Hevy-style: SET /
 /// PREVIOUS / KG / REPS / done-checkbox) and its own rest timer -- replaces
 /// the old per-set/per-exercise/per-timer full-screen PageView pages.
-class ActiveWorkoutScreen extends ConsumerWidget {
+class ActiveWorkoutScreen extends ConsumerStatefulWidget {
   final PageController controller;
 
   const ActiveWorkoutScreen(this.controller, {super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<ActiveWorkoutScreen> createState() => _ActiveWorkoutScreenState();
+}
+
+class _ActiveWorkoutScreenState extends ConsumerState<ActiveWorkoutScreen> {
+  StreamSubscription<RestTimerAction>? _actionsSubscription;
+
+  @override
+  void initState() {
+    super.initState();
+    // Routes +15s/skip taps from the live countdown notification to the same
+    // gym-state methods the in-app banner buttons call, so both paths
+    // converge on one source of truth.
+    _actionsSubscription = ref.read(restTimerNotificationServiceProvider).actions.listen((
+      action,
+    ) async {
+      final notifier = ref.read(gymStateProvider.notifier);
+      final notificationService = ref.read(restTimerNotificationServiceProvider);
+      final id = _slotNotificationId(action.slotUuid);
+
+      if (action.type == RestTimerActionType.skip) {
+        notifier.endRest(action.slotUuid);
+        await notificationService.cancel(id);
+        return;
+      }
+
+      notifier.extendRest(action.slotUuid, 15);
+      final updated = ref.read(gymStateProvider).getSlotByUUID(action.slotUuid);
+      final endTime = updated?.restEndTime;
+      if (endTime != null) {
+        await notificationService.showLiveCountdown(
+          id: id,
+          slotUuid: action.slotUuid,
+          endTime: endTime,
+        );
+        if (ref.read(gymStateProvider).alertOnCountdownEnd) {
+          await notificationService.scheduleRestEnd(id: id, endTime: endTime);
+        }
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _actionsSubscription?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final gymState = ref.watch(gymStateProvider);
+    final controller = widget.controller;
 
     return Scaffold(
       appBar: AppBar(
@@ -280,14 +329,28 @@ class _SetRowWidgetState extends ConsumerState<SetRowWidget> {
     notifier.markSetRowAsDone(row.uuid, isDone: true);
 
     final slot = ref.read(gymStateProvider).getSlotByUUID(widget.slotUuid);
-    if (slot != null && gymState.alertOnCountdownEnd) {
-      notifier.startRest(widget.slotUuid);
-      await ref.read(restTimerNotificationServiceProvider).scheduleRestEnd(
-            id: _slotNotificationId(widget.slotUuid),
-            endTime: DateTime.now().add(Duration(seconds: slot.restDurationSeconds)),
-          );
-    } else if (slot != null) {
-      notifier.startRest(widget.slotUuid);
+    if (slot == null) {
+      return;
+    }
+
+    notifier.startRest(widget.slotUuid);
+    final endTime = ref.read(gymStateProvider).getSlotByUUID(widget.slotUuid)?.restEndTime;
+    if (endTime == null) {
+      return;
+    }
+
+    final notificationService = ref.read(restTimerNotificationServiceProvider);
+    final id = _slotNotificationId(widget.slotUuid);
+    // The live countdown is quiet on its own (see the dedicated notification
+    // channel) so it's shown regardless; the alarm is what actually alerts
+    // at zero, gated by the existing user setting like before.
+    await notificationService.showLiveCountdown(
+      id: id,
+      slotUuid: widget.slotUuid,
+      endTime: endTime,
+    );
+    if (gymState.alertOnCountdownEnd) {
+      await notificationService.scheduleRestEnd(id: id, endTime: endTime);
     }
   }
 
@@ -494,6 +557,12 @@ class _RestTimerRowState extends ConsumerState<_RestTimerRow> {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) {
           ref.read(gymStateProvider.notifier).endRest(widget.slotUuid);
+          // If alertOnCountdownEnd is off, no zero-alert was ever scheduled
+          // to replace/dismiss the ongoing chronometer notification -- it
+          // would otherwise sit there frozen at 0:00 indefinitely.
+          ref
+              .read(restTimerNotificationServiceProvider)
+              .cancel(_slotNotificationId(widget.slotUuid));
         }
       });
     }
@@ -515,11 +584,19 @@ class _RestTimerRowState extends ConsumerState<_RestTimerRow> {
             onPressed: () async {
               ref.read(gymStateProvider.notifier).extendRest(widget.slotUuid, 15);
               final updated = ref.read(gymStateProvider).getSlotByUUID(widget.slotUuid);
-              if (updated?.restEndTime != null) {
-                await ref.read(restTimerNotificationServiceProvider).scheduleRestEnd(
-                      id: _slotNotificationId(widget.slotUuid),
-                      endTime: updated!.restEndTime!,
-                    );
+              final endTime = updated?.restEndTime;
+              if (endTime == null) {
+                return;
+              }
+              final notificationService = ref.read(restTimerNotificationServiceProvider);
+              final id = _slotNotificationId(widget.slotUuid);
+              await notificationService.showLiveCountdown(
+                id: id,
+                slotUuid: widget.slotUuid,
+                endTime: endTime,
+              );
+              if (ref.read(gymStateProvider).alertOnCountdownEnd) {
+                await notificationService.scheduleRestEnd(id: id, endTime: endTime);
               }
             },
             child: const Text('+15s'),
