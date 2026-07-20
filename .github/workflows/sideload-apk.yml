@@ -36,6 +36,28 @@ jobs:
         run: flutter test
         continue-on-error: true
 
+      # Without this, release builds fall back to Gradle's debug signing
+      # config (see android/app/build.gradle), which auto-generates a new
+      # random debug keystore per machine -- meaning every CI run would sign
+      # with a different key, and Android refuses to install an "update"
+      # signed with a different certificate than what's already on the
+      # device. This decodes a stable keystore generated once for this fork,
+      # into the exact path/format android/app/build.gradle already expects.
+      - name: Set up sideload signing key
+        if: ${{ secrets.SIDELOAD_KEYSTORE_BASE64 != '' }}
+        env:
+          SIDELOAD_KEYSTORE_BASE64: ${{ secrets.SIDELOAD_KEYSTORE_BASE64 }}
+          SIDELOAD_KEYSTORE_PASSWORD: ${{ secrets.SIDELOAD_KEYSTORE_PASSWORD }}
+        run: |
+          mkdir -p fastlane/metadata/envfiles
+          echo "$SIDELOAD_KEYSTORE_BASE64" | base64 -d > fastlane/metadata/envfiles/keys.jks
+          cat > fastlane/metadata/envfiles/key.properties <<EOF
+          storePassword=$SIDELOAD_KEYSTORE_PASSWORD
+          keyPassword=$SIDELOAD_KEYSTORE_PASSWORD
+          keyAlias=wgerforksideload
+          storeFile=../../fastlane/metadata/envfiles/keys.jks
+          EOF
+
       - name: Build release APK
         run: flutter build apk --release
 
