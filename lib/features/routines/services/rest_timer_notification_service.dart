@@ -59,6 +59,7 @@ class FlutterRestTimerNotificationService implements RestTimerNotificationServic
   final _logger = Logger('RestTimerNotificationService');
   final _plugin = FlutterLocalNotificationsPlugin();
   bool _initialized = false;
+  String? _timezoneError;
 
   @override
   Future<void> init() async {
@@ -71,6 +72,7 @@ class FlutterRestTimerNotificationService implements RestTimerNotificationServic
       final timezone = await FlutterTimezone.getLocalTimezone();
       tz.setLocalLocation(tz.getLocation(timezone.identifier));
     } catch (e) {
+      _timezoneError = e.toString();
       _logger.warning('Could not resolve local timezone, falling back to UTC: $e');
     }
 
@@ -163,12 +165,25 @@ class FlutterRestTimerNotificationService implements RestTimerNotificationServic
   Future<String> diagnose() async {
     final buffer = StringBuffer();
     buffer.writeln('initialized: $_initialized');
+    buffer.writeln('tz.local: ${tz.local.name}');
+    buffer.writeln('timezoneError: $_timezoneError');
 
     final notificationsEnabled = await _android?.areNotificationsEnabled();
     buffer.writeln('areNotificationsEnabled: $notificationsEnabled');
 
     final canScheduleExact = await _android?.canScheduleExactNotifications();
     buffer.writeln('canScheduleExactNotifications: $canScheduleExact');
+
+    final now = DateTime.now();
+    final wantedEnd = now.add(const Duration(seconds: 10));
+    final scheduledAsTz = tz.TZDateTime.from(wantedEnd, tz.local);
+    buffer.writeln('now: $now');
+    buffer.writeln('wanted end: $wantedEnd');
+    buffer.writeln('as TZDateTime: $scheduledAsTz');
+    buffer.writeln(
+      'delta from now (ms): ${scheduledAsTz.millisecondsSinceEpoch - now.millisecondsSinceEpoch}',
+    );
+    buffer.writeln('scheduledAsTz.isAfter(now): ${scheduledAsTz.isAfter(now)}');
 
     const androidDetails = AndroidNotificationDetails(
       _channelId,
@@ -197,6 +212,16 @@ class FlutterRestTimerNotificationService implements RestTimerNotificationServic
       buffer.writeln('scheduleRestEnd(+10s): OK -- wait 10s and check the tray');
     } catch (e) {
       buffer.writeln('scheduleRestEnd(+10s): THREW: $e');
+    }
+
+    try {
+      final pending = await _plugin.pendingNotificationRequests();
+      buffer.writeln(
+        'pendingNotificationRequests: ${pending.map((p) => p.id).toList()} '
+        '(999998 present = actually registered with the OS)',
+      );
+    } catch (e) {
+      buffer.writeln('pendingNotificationRequests: THREW: $e');
     }
 
     return buffer.toString();
