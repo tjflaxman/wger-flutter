@@ -72,6 +72,22 @@ class FlutterRestTimerNotificationService implements RestTimerNotificationServic
     const initSettings = InitializationSettings(android: androidSettings);
     await _plugin.initialize(settings: initSettings);
 
+    // Explicit rather than relying on implicit on-demand creation: this
+    // notification is delivered later via a system alarm broadcast, not
+    // directly through a running instance of the app, so the channel needs
+    // to already exist with the right importance/sound/vibration settings
+    // by the time that broadcast fires.
+    await _android?.createNotificationChannel(
+      const AndroidNotificationChannel(
+        _channelId,
+        _channelName,
+        description: _channelDescription,
+        importance: Importance.max,
+        playSound: true,
+        enableVibration: true,
+      ),
+    );
+
     _initialized = true;
   }
 
