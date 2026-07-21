@@ -16,6 +16,7 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+import 'package:clock/clock.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -68,7 +69,7 @@ class _RoutinesListState extends ConsumerState<RoutinesList> {
             // be opened if it was already loaded earlier
             final canOpen = isOnline || currentRoutine.isHydrated;
 
-            final now = DateTime.now();
+            final now = clock.now();
             final isActive =
                 !now.isBefore(currentRoutine.start) && !now.isAfter(currentRoutine.end);
 
@@ -206,7 +207,7 @@ class _RoutinesListState extends ConsumerState<RoutinesList> {
                 .animate()
                 .fadeIn(
                   duration: AppMotion.standard,
-                  delay: Duration(milliseconds: 30 * index.clamp(0, 10).toInt()),
+                  delay: Duration(milliseconds: 30 * index.clamp(0, 10)),
                 )
                 .slideY(
                   begin: 0.05,

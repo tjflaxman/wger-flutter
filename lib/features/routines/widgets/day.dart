@@ -16,6 +16,7 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+import 'package:clock/clock.dart';
 import 'package:flutter/material.dart';
 import 'package:wger/core/date.dart';
 import 'package:wger/core/widgets/core.dart';
@@ -104,7 +105,7 @@ class RoutineDayWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isToday = _dayData.date.isSameDayAs(DateTime.now());
+    final isToday = _dayData.date.isSameDayAs(clock.now());
     final isWorkoutDay = _dayData.day != null && !_dayData.day!.isRest;
     final colorScheme = Theme.of(context).colorScheme;
 
@@ -168,7 +169,7 @@ class DayHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     final i18n = AppLocalizations.of(context);
     final colorScheme = Theme.of(context).colorScheme;
-    final isToday = _dayData.date.isSameDayAs(DateTime.now());
+    final isToday = _dayData.date.isSameDayAs(clock.now());
 
     if (_dayData.day == null || _dayData.day!.isRest) {
       return ListTile(

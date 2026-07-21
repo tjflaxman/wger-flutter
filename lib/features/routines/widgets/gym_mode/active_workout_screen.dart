@@ -18,6 +18,7 @@
 
 import 'dart:async';
 
+import 'package:clock/clock.dart';
 import 'package:collection/collection.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
@@ -549,7 +550,14 @@ class _RestTimerRowState extends ConsumerState<_RestTimerRow> {
       );
     }
 
-    final remaining = slot.restEndTime!.difference(DateTime.now());
+    // clock.now(), not DateTime.now(): restEndTime was computed from
+    // clock.now() in startRest() (gym_state_notifier.dart), which tests
+    // override via withClock() to a fixed date. Comparing against real
+    // wall-clock time here would make the countdown read as already
+    // expired the moment a fixed test clock isn't "now" -- which is
+    // exactly what was happening (this is the fix for the "the other
+    // exercise is idle" / 2 idle rows test failure).
+    final remaining = slot.restEndTime!.difference(clock.now());
     final remainingSeconds = remaining.inSeconds <= 0 ? 0 : remaining.inSeconds;
 
     if (remainingSeconds == 0) {
