@@ -19,6 +19,7 @@
 import 'package:clock/clock.dart';
 import 'package:collection/collection.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:logging/logging.dart';
 import 'package:wger/core/date.dart';
@@ -32,6 +33,8 @@ import 'package:wger/features/routines/widgets/gym_mode/navigation.dart';
 import 'package:wger/features/trophies/models/user_trophy.dart';
 import 'package:wger/features/trophies/providers/trophy_notifier.dart';
 import 'package:wger/l10n/generated/app_localizations.dart';
+import 'package:wger/theme/motion.dart';
+import 'package:wger/theme/spacing.dart';
 
 import '../logs/exercises_expansion_card.dart';
 import '../logs/muscle_groups.dart';
@@ -126,7 +129,6 @@ class WorkoutSessionStats extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final i18n = AppLocalizations.of(context);
-    final theme = Theme.of(context);
 
     if (_session == null) {
       return Center(
@@ -150,77 +152,210 @@ class WorkoutSessionStats extends ConsumerWidget {
     }
 
     return ListView(
-      padding: const EdgeInsets.all(16.0),
+      padding: const EdgeInsets.all(AppSpacing.lg),
       children: [
-        Row(
-          children: [
-            Expanded(
-              child: InfoCard(
-                title: i18n.duration,
-                value: sessionDuration != null
-                    ? i18n.durationHoursMinutes(
-                        sessionDuration.inHours,
-                        sessionDuration.inMinutes.remainder(60),
-                      )
-                    : '-/-',
-              ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: InfoCard(
-                title: i18n.volume,
-                value: '${volumeValue.toStringAsFixed(0)} $volumeUnit',
-              ),
-            ),
-          ],
+        _WorkoutHeroCard(
+          durationText: sessionDuration != null
+              ? i18n.durationHoursMinutes(
+                  sessionDuration.inHours,
+                  sessionDuration.inMinutes.remainder(60),
+                )
+              : '-/-',
+          durationLabel: i18n.duration,
+          volumeText: '${volumeValue.toStringAsFixed(0)} $volumeUnit',
+          volumeLabel: i18n.volume,
+        ).animate().fadeIn(duration: AppMotion.standard).slideY(
+          begin: 0.08,
+          end: 0,
+          duration: AppMotion.standard,
+          curve: AppMotion.standardCurve,
         ),
         if (_userPrTrophies.isNotEmpty)
           Padding(
-            padding: const EdgeInsets.only(top: 10),
-            child: InfoCard(
-              title: i18n.personalRecords,
-              value: _userPrTrophies.length.toString(),
-              color: theme.colorScheme.tertiaryContainer,
-            ),
+            padding: const EdgeInsets.only(top: AppSpacing.md),
+            child:
+                _PrTrophyCard(count: _userPrTrophies.length)
+                    .animate()
+                    .fadeIn(
+                      delay: AppMotion.standard,
+                      duration: AppMotion.standard,
+                    )
+                    .scale(
+                      begin: const Offset(0.85, 0.85),
+                      end: const Offset(1, 1),
+                      delay: AppMotion.standard,
+                      duration: AppMotion.standard,
+                      curve: AppMotion.emphasizedCurve,
+                    ),
           ),
-        const SizedBox(height: 10),
+        const SizedBox(height: AppSpacing.md),
         MuscleGroupsCard(_session.logs),
-        const SizedBox(height: 10),
+        const SizedBox(height: AppSpacing.md),
         ExercisesCard(_session, _userPrTrophies),
-        FilledButton(
-          onPressed: () {
-            ref.read(gymStateProvider.notifier).clear();
-            Navigator.of(context).pop();
-          },
-          child: Text(i18n.endWorkout),
+        const SizedBox(height: AppSpacing.md),
+        SizedBox(
+          width: double.infinity,
+          child: FilledButton.icon(
+            onPressed: () {
+              ref.read(gymStateProvider.notifier).clear();
+              Navigator.of(context).pop();
+            },
+            icon: const Icon(Icons.check),
+            label: Text(i18n.endWorkout),
+          ),
         ),
       ],
     );
   }
 }
 
-class InfoCard extends StatelessWidget {
-  final String title;
-  final String value;
-  final Color? color;
+/// The top-of-summary hero: duration + volume as the two headline numbers,
+/// on a single tinted card instead of two plain white ones, so the two
+/// numbers that matter most read as a pair rather than a generic stat list.
+class _WorkoutHeroCard extends StatelessWidget {
+  final String durationLabel;
+  final String durationText;
+  final String volumeLabel;
+  final String volumeText;
 
-  const InfoCard({required this.title, required this.value, this.color, super.key});
+  const _WorkoutHeroCard({
+    required this.durationLabel,
+    required this.durationText,
+    required this.volumeLabel,
+    required this.volumeText,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final i18n = AppLocalizations.of(context);
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(AppSpacing.lg),
+      decoration: BoxDecoration(
+        color: colorScheme.primaryContainer,
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.check_circle, color: colorScheme.onPrimaryContainer),
+              const SizedBox(width: AppSpacing.sm),
+              Text(
+                i18n.workoutCompleted,
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  color: colorScheme.onPrimaryContainer,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.lg),
+          Row(
+            children: [
+              Expanded(
+                child: _HeroStat(
+                  label: durationLabel,
+                  value: durationText,
+                  foreground: colorScheme.onPrimaryContainer,
+                ),
+              ),
+              SizedBox(
+                height: 40,
+                child: VerticalDivider(
+                  color: colorScheme.onPrimaryContainer.withValues(alpha: 0.3),
+                ),
+              ),
+              Expanded(
+                child: _HeroStat(
+                  label: volumeLabel,
+                  value: volumeText,
+                  foreground: colorScheme.onPrimaryContainer,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _HeroStat extends StatelessWidget {
+  final String label;
+  final String value;
+  final Color foreground;
+
+  const _HeroStat({required this.label, required this.value, required this.foreground});
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return Card(
-      color: color,
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(title, style: theme.textTheme.titleMedium),
-            const SizedBox(height: 8),
-            Text(value, style: theme.textTheme.headlineMedium),
-          ],
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          value,
+          style: theme.textTheme.headlineMedium?.copyWith(
+            color: foreground,
+            fontWeight: FontWeight.bold,
+          ),
         ),
+        Text(label, style: theme.textTheme.bodyMedium?.copyWith(color: foreground)),
+      ],
+    );
+  }
+}
+
+/// A distinct, celebratory card for PR count -- separated visually from the
+/// duration/volume stats (and animated in with a slight delay + pop/scale)
+/// so a personal record actually reads as an event, not just another number.
+class _PrTrophyCard extends StatelessWidget {
+  final int count;
+
+  const _PrTrophyCard({required this.count});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final i18n = AppLocalizations.of(context);
+    final colorScheme = theme.colorScheme;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg, vertical: AppSpacing.md),
+      decoration: BoxDecoration(
+        color: colorScheme.tertiaryContainer,
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.emoji_events, color: colorScheme.onTertiaryContainer, size: 32),
+          const SizedBox(width: AppSpacing.md),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  count.toString(),
+                  style: theme.textTheme.headlineSmall?.copyWith(
+                    color: colorScheme.onTertiaryContainer,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                Text(
+                  i18n.personalRecords,
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: colorScheme.onTertiaryContainer,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
