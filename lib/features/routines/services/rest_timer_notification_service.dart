@@ -345,6 +345,30 @@ class FlutterRestTimerNotificationService implements RestTimerNotificationServic
       buffer.writeln('pendingNotificationRequests: THREW: $e');
     }
 
+    try {
+      await showLiveCountdown(
+        id: 999997,
+        slotUuid: 'diagnose-fake-slot',
+        endTime: DateTime.now().add(const Duration(minutes: 2)),
+      );
+      buffer.writeln(
+        'showLiveCountdown(): OK -- check the tray for an ongoing "Resting" '
+        'notification (may need to expand the "silent"/collapsed section)',
+      );
+    } catch (e) {
+      buffer.writeln('showLiveCountdown(): THREW: $e');
+    }
+
+    try {
+      final active = await _plugin.getActiveNotifications();
+      buffer.writeln(
+        'active notifications: ${active.map((n) => '${n.id}(chan:${n.channelId})').toList()} '
+        '(999997 present = the OS is actually holding it, not just accepted the call)',
+      );
+    } catch (e) {
+      buffer.writeln('getActiveNotifications(): THREW: $e');
+    }
+
     return buffer.toString();
   }
 }
