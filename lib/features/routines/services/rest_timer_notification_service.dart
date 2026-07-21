@@ -94,7 +94,18 @@ class FlutterRestTimerNotificationService implements RestTimerNotificationServic
   // notification override it -- the live countdown needs to be quiet when it
   // first appears (importance/sound belong to the zero-alert, not to
   // starting a rest period), which isn't possible on the same channel.
-  static const _ongoingChannelId = 'rest_timer_ongoing';
+  //
+  // "_v2" because channels are immutable once created on a device: the
+  // first version used Importance.low, which (confirmed via
+  // getActiveNotifications() -- the OS really was holding the notification)
+  // suppresses the status bar icon and can bury it behind a "silent
+  // notifications" collapse in the shade, exactly what was reported as "no
+  // lockscreen/status bar countdown". Bumping this file's Importance value
+  // alone wouldn't have retroactively changed an already-created channel on
+  // a device that already ran an earlier build -- same lesson as the
+  // scheduled-notification-receiver fix in Phase 1. A new channel id forces
+  // a fresh one to be created with the corrected importance instead.
+  static const _ongoingChannelId = 'rest_timer_ongoing_v2';
   static const _ongoingChannelName = 'Rest timer (in progress)';
   static const _ongoingChannelDescription = 'Live countdown while resting between sets';
 
@@ -167,7 +178,7 @@ class FlutterRestTimerNotificationService implements RestTimerNotificationServic
         _ongoingChannelId,
         _ongoingChannelName,
         description: _ongoingChannelDescription,
-        importance: Importance.low,
+        importance: Importance.defaultImportance,
         playSound: false,
         enableVibration: false,
       ),

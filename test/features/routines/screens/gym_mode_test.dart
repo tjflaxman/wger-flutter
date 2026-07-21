@@ -224,9 +224,17 @@ void main() {
         await tester.pumpAndSettle();
         expect(find.byType(ExerciseDetail), findsNothing);
 
-        // Complete the first set: the rest timer for that exercise should
-        // start automatically.
-        await tester.tap(find.byType(Checkbox).first);
+        // Complete Bench press's first set (targeted by key, not tree-order
+        // .first, for the same reason as the toggle above): the rest timer
+        // for that exercise should start automatically.
+        final firstRowUuid = container
+            .read(gymStateProvider)
+            .exerciseSlots
+            .first
+            .setRows
+            .first
+            .uuid;
+        await tester.tap(find.byKey(ValueKey('set-row-checkbox-$firstRowUuid')));
         await tester.pumpAndSettle();
         expect(find.text('0/3 sets'), findsOneWidget, reason: 'one exercise now has a set done');
         expect(find.text('1/3 sets'), findsOneWidget);
