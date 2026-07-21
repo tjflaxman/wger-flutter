@@ -35,6 +35,7 @@ import 'package:wger/features/routines/models/repetition_unit.dart';
 import 'package:wger/features/routines/models/session.dart';
 import 'package:wger/features/routines/models/weight_unit.dart';
 import 'package:wger/features/routines/providers/gym_state.dart';
+import 'package:wger/features/routines/providers/gym_state_notifier.dart';
 import 'package:wger/features/routines/providers/routines_notifier.dart';
 import 'package:wger/features/routines/providers/routines_repository.dart';
 import 'package:wger/features/routines/providers/workout_logs_repository.dart';
@@ -203,12 +204,23 @@ void main() {
         // Expand the "Bench press" section's instructions via its info
         // toggle, then collapse it again -- ExerciseDetail (videos/images/
         // description) is tall enough to push the second exercise's card
-        // outside the test's default viewport otherwise, which would make
-        // later finders miss it rather than reflect an actual bug.
-        await tester.tap(find.byIcon(Icons.info_outline).first);
+        // outside the test's default viewport otherwise. Target the same
+        // section's toggle by its stable key for both taps: its icon swaps
+        // from info_outline to info once expanded, so a find.byIcon(...)
+        // lookup would (a) stop matching this section by icon type on the
+        // second tap and (b) risk resolving to the OTHER section's toggle
+        // instead, which may itself be scrolled off-screen by this point.
+        final container = riverpod.ProviderScope.containerOf(
+          tester.element(find.byType(ActiveWorkoutScreen)),
+        );
+        final firstSlotUuid = container.read(gymStateProvider).exerciseSlots.first.uuid;
+        final detailToggleFinder = find.byKey(ValueKey('exercise-detail-toggle-$firstSlotUuid'));
+
+        await tester.tap(detailToggleFinder);
         await tester.pumpAndSettle();
         expect(find.byType(ExerciseDetail), findsOneWidget);
-        await tester.tap(find.byIcon(Icons.info_outline).first);
+        await tester.ensureVisible(detailToggleFinder);
+        await tester.tap(detailToggleFinder);
         await tester.pumpAndSettle();
         expect(find.byType(ExerciseDetail), findsNothing);
 
