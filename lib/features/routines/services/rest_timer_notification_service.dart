@@ -223,6 +223,13 @@ class FlutterRestTimerNotificationService implements RestTimerNotificationServic
       priority: Priority.high,
       playSound: true,
       enableVibration: true,
+      // Without this, a phone set to "hide sensitive notification content"
+      // on the lock screen redacts the title/body down to just the app
+      // name -- explicit public visibility asks for the full content
+      // instead. Doesn't override a phone set to hide notifications
+      // entirely at the system level; that's a device setting, not
+      // something a single notification can force.
+      visibility: NotificationVisibility.public,
     );
     const details = NotificationDetails(android: androidDetails);
 
@@ -268,6 +275,7 @@ class FlutterRestTimerNotificationService implements RestTimerNotificationServic
       chronometerCountDown: true,
       showWhen: true,
       when: endTime.millisecondsSinceEpoch,
+      visibility: NotificationVisibility.public,
       actions: const [
         // Re-posted with a new `when:` right after handling the tap (see
         // ActiveWorkoutScreen's action-stream listener), so keep this
@@ -325,6 +333,7 @@ class FlutterRestTimerNotificationService implements RestTimerNotificationServic
       priority: Priority.high,
       playSound: true,
       enableVibration: true,
+      visibility: NotificationVisibility.public,
     );
 
     try {
