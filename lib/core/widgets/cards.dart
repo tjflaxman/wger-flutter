@@ -37,6 +37,36 @@ class InfoCard extends StatelessWidget {
   }
 }
 
+/// A small title/value stat card (e.g. "Personal records: 3"), optionally
+/// tinted -- distinct from [InfoCard] above, which is a message banner with
+/// fixed styling, not a labelled number.
+class StatCard extends StatelessWidget {
+  final String title;
+  final String value;
+  final Color? color;
+
+  const StatCard({required this.title, required this.value, this.color, super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Card(
+      color: color,
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(title, style: theme.textTheme.titleMedium),
+            const SizedBox(height: 8),
+            Text(value, style: theme.textTheme.headlineMedium),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class WarningCard extends StatelessWidget {
   final String text;
 

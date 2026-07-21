@@ -19,11 +19,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wger/core/date.dart';
+import 'package:wger/core/widgets/cards.dart';
 import 'package:wger/features/routines/models/routine.dart';
 import 'package:wger/features/trophies/providers/trophy_notifier.dart';
 import 'package:wger/l10n/generated/app_localizations.dart';
 
-import '../gym_mode/summary.dart';
 import 'exercise_log_chart.dart';
 import 'log_delete_dialog.dart';
 import 'log_edit_dialog.dart';
@@ -58,7 +58,7 @@ class DayLogWidget extends ConsumerWidget {
         if (prTrophies.isNotEmpty)
           SizedBox(
             width: double.infinity,
-            child: InfoCard(
+            child: StatCard(
               title: i18n.personalRecords,
               value: prTrophies.length.toString(),
               color: theme.colorScheme.tertiaryContainer,
