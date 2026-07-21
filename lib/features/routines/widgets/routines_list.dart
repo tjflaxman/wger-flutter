@@ -17,6 +17,7 @@
  */
 
 import 'package:flutter/material.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wger/core/formatting/formatting.dart';
 import 'package:wger/core/network/network_provider.dart';
@@ -26,6 +27,8 @@ import 'package:wger/core/widgets/text_prompt.dart';
 import 'package:wger/features/routines/providers/routines_notifier.dart';
 import 'package:wger/features/routines/screens/routine_screen.dart';
 import 'package:wger/l10n/generated/app_localizations.dart';
+import 'package:wger/theme/motion.dart';
+import 'package:wger/theme/spacing.dart';
 
 class RoutinesList extends ConsumerStatefulWidget {
   const RoutinesList();
@@ -58,14 +61,27 @@ class _RoutinesListState extends ConsumerState<RoutinesList> {
           itemBuilder: (context, index) {
             final currentRoutine = routines[index];
             final routineId = currentRoutine.id!;
+            final i18n = AppLocalizations.of(context);
+            final colorScheme = Theme.of(context).colorScheme;
 
             // The routine structure is fetched via REST. Offline it can only
             // be opened if it was already loaded earlier
             final canOpen = isOnline || currentRoutine.isHydrated;
 
+            final now = DateTime.now();
+            final isActive =
+                !now.isBefore(currentRoutine.start) && !now.isAfter(currentRoutine.end);
+
             return Card(
-              child: ListTile(
-                enabled: canOpen,
+              margin: const EdgeInsets.only(bottom: AppSpacing.sm),
+              clipBehavior: Clip.antiAlias,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+                side: isActive
+                    ? BorderSide(color: colorScheme.primary, width: 2)
+                    : BorderSide.none,
+              ),
+              child: InkWell(
                 onTap: canOpen
                     ? () async {
                         if (isOnline) {
@@ -89,35 +105,115 @@ class _RoutinesListState extends ConsumerState<RoutinesList> {
                         }
                       }
                     : null,
-                title: Text(currentRoutine.name),
-                subtitle: Text(
-                  '${dateFormat.format(currentRoutine.start)}'
-                  ' - ${dateFormat.format(currentRoutine.end)}',
-                ),
-                trailing: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    if (!canOpen) const Icon(Icons.cloud_off),
-                    const VerticalDivider(),
-                    if (_loadingRoutine == currentRoutine.id)
-                      const IconButton(
-                        icon: CircularProgressIndicator(),
-                        onPressed: null,
-                      )
-                    else
-                      IconButton(
-                        icon: const Icon(Icons.delete),
-                        tooltip: AppLocalizations.of(context).delete,
-                        onPressed: () => showConfirmDeleteDialog(
-                          context,
-                          itemName: currentRoutine.name,
-                          onConfirm: () => routineProvider.deleteRoutine(currentRoutine.id!),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.lg,
+                    vertical: AppSpacing.md,
+                  ),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    currentRoutine.name,
+                                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                      fontWeight: FontWeight.bold,
+                                      color: canOpen ? null : colorScheme.onSurface.withValues(
+                                        alpha: 0.4,
+                                      ),
+                                    ),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                                if (isActive)
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: AppSpacing.sm,
+                                      vertical: 2,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: colorScheme.primary.withValues(alpha: 0.14),
+                                      borderRadius: BorderRadius.circular(999),
+                                    ),
+                                    child: Text(
+                                      i18n.active,
+                                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                                        color: colorScheme.primary,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ),
+                              ],
+                            ),
+                            const SizedBox(height: AppSpacing.xs),
+                            Row(
+                              children: [
+                                Icon(
+                                  Icons.calendar_today_outlined,
+                                  size: 14,
+                                  color: colorScheme.onSurfaceVariant,
+                                ),
+                                const SizedBox(width: AppSpacing.xs),
+                                Text(
+                                  '${dateFormat.format(currentRoutine.start)}'
+                                  ' - ${dateFormat.format(currentRoutine.end)}',
+                                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                    color: colorScheme.onSurfaceVariant,
+                                  ),
+                                ),
+                                if (!canOpen) ...[
+                                  const SizedBox(width: AppSpacing.sm),
+                                  Icon(
+                                    Icons.cloud_off,
+                                    size: 14,
+                                    color: colorScheme.onSurfaceVariant,
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ],
                         ),
                       ),
-                  ],
+                      if (_loadingRoutine == currentRoutine.id)
+                        const Padding(
+                          padding: EdgeInsets.symmetric(horizontal: AppSpacing.sm),
+                          child: SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          ),
+                        )
+                      else
+                        IconButton(
+                          icon: const Icon(Icons.delete_outline),
+                          tooltip: i18n.delete,
+                          onPressed: () => showConfirmDeleteDialog(
+                            context,
+                            itemName: currentRoutine.name,
+                            onConfirm: () => routineProvider.deleteRoutine(currentRoutine.id!),
+                          ),
+                        ),
+                    ],
+                  ),
                 ),
               ),
-            );
+            )
+                .animate()
+                .fadeIn(
+                  duration: AppMotion.standard,
+                  delay: Duration(milliseconds: 30 * index.clamp(0, 10).toInt()),
+                )
+                .slideY(
+                  begin: 0.05,
+                  end: 0,
+                  duration: AppMotion.standard,
+                  curve: AppMotion.standardCurve,
+                );
           },
         );
       },

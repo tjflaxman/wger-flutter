@@ -96,13 +96,12 @@ void main() {
     expect(find.text('test 1'), findsOneWidget);
     expect(find.text('test 2'), findsOneWidget);
     expect(find.byType(Card), findsNWidgets(2));
-    expect(find.byType(ListTile), findsNWidgets(2));
   });
 
   testWidgets('Test deleting an item using the Delete button', (WidgetTester tester) async {
     await tester.pumpWidget(renderWidget());
     await tester.pumpAndSettle();
-    await tester.tap(find.byIcon(Icons.delete).first);
+    await tester.tap(find.byIcon(Icons.delete_outline).first);
     await tester.pumpAndSettle();
 
     // Confirmation dialog
@@ -121,12 +120,12 @@ void main() {
     await tester.pumpAndSettle();
 
     final deleteButton = tester.widget<IconButton>(
-      find.widgetWithIcon(IconButton, Icons.delete).first,
+      find.widgetWithIcon(IconButton, Icons.delete_outline).first,
     );
     expect(deleteButton.onPressed, isNotNull);
 
     // The confirmation dialog opens and the delete flow runs through.
-    await tester.tap(find.byIcon(Icons.delete).first);
+    await tester.tap(find.byIcon(Icons.delete_outline).first);
     await tester.pumpAndSettle();
     expect(find.byType(AlertDialog), findsOneWidget);
     await tester.tap(find.text('Delete'));

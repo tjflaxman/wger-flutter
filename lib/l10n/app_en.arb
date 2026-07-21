@@ -631,6 +631,10 @@
     "description": "Header for the column of 'logged' nutritional values, i.e. what was eaten"
   },
   "today": "Today",
+  "active": "Active",
+  "@active": {
+    "description": "Badge shown on a routine that is currently in its active date range"
+  },
   "loggedToday": "Logged today",
   "weekAverage": "7 day average",
   "@weekAverage": {
