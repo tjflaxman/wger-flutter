@@ -216,7 +216,10 @@ class _GymModeOptionsState extends ConsumerState<GymModeOptions> {
                             context: context,
                             builder: (ctx) => AlertDialog(
                               title: const Text('Notification diagnostic'),
-                              content: SelectableText(report),
+                              content: SizedBox(
+                                width: double.maxFinite,
+                                child: SingleChildScrollView(child: SelectableText(report)),
+                              ),
                               actions: [
                                 TextButton(
                                   onPressed: () => Navigator.of(ctx).pop(),
