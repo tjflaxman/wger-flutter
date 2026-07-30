@@ -275,6 +275,14 @@ class _AuthCardState extends ConsumerState<AuthCard> {
     // there is no connectivity.
     final isOnline = ref.watch(networkStatusProvider);
 
+    // Involuntary logout (expired/revoked tokens): tell the user why they
+    // are looking at the login form. The transient snackbar shown at the
+    // moment of the logout is easy to miss, this hint persists until the
+    // next login.
+    final sessionExpired = ref.watch(
+      authProvider.select((s) => s.value?.sessionExpired ?? false),
+    );
+
     Widget errorMessage = const SizedBox.shrink();
     if (_httpError != null) {
       errorMessage = FormHttpErrorsWidget(_httpError!);
@@ -309,6 +317,15 @@ class _AuthCardState extends ConsumerState<AuthCard> {
             child: AutofillGroup(
               child: Column(
                 children: [
+                  if (sessionExpired && _authMode == AuthMode.login)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 10),
+                      child: Text(
+                        i18n.sessionExpired,
+                        textAlign: TextAlign.center,
+                        style: TextStyle(color: Theme.of(context).colorScheme.primary),
+                      ),
+                    ),
                   errorMessage,
                   if (_useUsernameAndPassword) UsernameField(controller: _usernameController),
                   if (_authMode == AuthMode.register) EmailField(controller: _emailController),
