@@ -80,6 +80,11 @@ class GymStateNotifier extends _$GymStateNotifier {
       state = state.copyWith(showDistinctLogs: showDistinctLogs);
     }
 
+    final showWorkoutDuration = await prefs.getBool(PREFS_SHOW_WORKOUT_DURATION);
+    if (showWorkoutDuration != null && showWorkoutDuration != state.showWorkoutDuration) {
+      state = state.copyWith(showWorkoutDuration: showWorkoutDuration);
+    }
+
     _logger.finer(
       'Loaded saved preferences: '
       'showExercise=$showExercise '
@@ -88,7 +93,8 @@ class GymStateNotifier extends _$GymStateNotifier {
       'useCountdownBetweenSets=$useCountdownBetweenSets '
       'defaultCountdownDurationSeconds=$defaultCountdownDurationSeconds'
       'logScopeWeeks=$logScopeWeeks '
-      'showDistinctLogs=$showDistinctLogs ',
+      'showDistinctLogs=$showDistinctLogs '
+      'showWorkoutDuration=$showWorkoutDuration ',
     );
   }
 
@@ -108,6 +114,7 @@ class GymStateNotifier extends _$GymStateNotifier {
       await prefs.remove(PREFS_LOG_SCOPE_WEEKS);
     }
     await prefs.setBool(PREFS_SHOW_DISTINCT_LOGS, state.showDistinctLogs);
+    await prefs.setBool(PREFS_SHOW_WORKOUT_DURATION, state.showWorkoutDuration);
 
     _logger.finer(
       'Saved preferences: '
@@ -117,7 +124,8 @@ class GymStateNotifier extends _$GymStateNotifier {
       'useCountdownBetweenSets=${state.useCountdownBetweenSets} '
       'defaultCountdownDuration=${state.countdownDuration.inSeconds}'
       'logScopeWeeks=${state.logScopeWeeks} '
-      'showDistinctLogs=${state.showDistinctLogs} ',
+      'showDistinctLogs=${state.showDistinctLogs} '
+      'showWorkoutDuration=${state.showWorkoutDuration} ',
     );
   }
 
@@ -191,6 +199,8 @@ class GymStateNotifier extends _$GymStateNotifier {
       dayId: dayId,
       routine: routine,
       iteration: iteration,
+      // A fresh workout also restarts the elapsed timer.
+      workoutStart: shouldReset ? clock.now() : null,
     );
 
     // Note that this is only done if we need to reset, otherwise we keep the
@@ -240,6 +250,17 @@ class GymStateNotifier extends _$GymStateNotifier {
   void setShowDistinctLogs(bool value) {
     state = state.copyWith(showDistinctLogs: value);
     _savePrefs();
+  }
+
+  void setShowWorkoutDuration(bool value) {
+    state = state.copyWith(showWorkoutDuration: value);
+    _savePrefs();
+  }
+
+  /// Resets the workout start time to now, e.g. when the user taps "start".
+  void startWorkout() {
+    _logger.fine('Setting workout start time');
+    state = state.copyWith(workoutStart: clock.now());
   }
 
   void markSetRowAsDone(String uuid, {required bool isDone}) {
@@ -509,7 +530,7 @@ class GymStateNotifier extends _$GymStateNotifier {
       exerciseSlots: [],
 
       validUntil: clock.now().add(DEFAULT_DURATION),
-      startTime: null,
+      workoutStart: clock.now(),
     );
   }
 }

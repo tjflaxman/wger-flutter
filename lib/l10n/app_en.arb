@@ -423,6 +423,7 @@
   }
 },
 "gymModeDistinctLogs": "Hide duplicate values",
+  "gymModeShowWorkoutDuration": "Show workout duration",
   "addMeal": "Add meal",
   "@addMeal": {},
   "mealLogged": "Meal logged to diary",

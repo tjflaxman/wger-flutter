@@ -115,7 +115,7 @@ void main() {
 
     notifier.state = notifier.state.copyWith(
       routine: testRoutine,
-      startTime: const TimeOfDay(hour: 13, minute: 35),
+      workoutStart: DateTime(2021, 5, 1, 13, 35),
     );
     notifier.buildWorkoutStructure();
 
@@ -132,7 +132,7 @@ void main() {
     // Arrange
     testRoutine.sessions = [];
     notifier.state = notifier.state.copyWith(
-      startTime: const TimeOfDay(hour: 13, minute: 35),
+      workoutStart: DateTime(2021, 5, 1, 13, 35),
     );
 
     // Act

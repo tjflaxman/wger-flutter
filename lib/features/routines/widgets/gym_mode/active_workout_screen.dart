@@ -30,6 +30,7 @@ import 'package:wger/features/routines/providers/gym_state.dart';
 import 'package:wger/features/routines/providers/gym_state_notifier.dart';
 import 'package:wger/features/routines/providers/workout_logs_notifier.dart';
 import 'package:wger/features/routines/services/rest_timer_notification_service.dart';
+import 'package:wger/features/routines/widgets/gym_mode/elapsed_time.dart';
 import 'package:wger/features/routines/widgets/gym_mode/workout_menu.dart';
 import 'package:wger/theme/motion.dart';
 import 'package:wger/theme/spacing.dart';
@@ -103,7 +104,13 @@ class _ActiveWorkoutScreenState extends ConsumerState<ActiveWorkoutScreen> {
           icon: const Icon(Icons.close),
           onPressed: () => Navigator.of(context).pop(),
         ),
-        title: const Text('Workout'),
+        title: gymState.showWorkoutDuration
+            ? Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: const [Text('Workout'), ElapsedWorkoutTimer()],
+              )
+            : const Text('Workout'),
         actions: [
           IconButton(
             icon: const Icon(Icons.menu),

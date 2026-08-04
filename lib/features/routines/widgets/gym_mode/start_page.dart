@@ -191,6 +191,12 @@ class _GymModeOptionsState extends ConsumerState<GymModeOptions> {
                         value: gymState.showDistinctLogs,
                         onChanged: (value) => gymNotifier.setShowDistinctLogs(value),
                       ),
+                      SwitchListTile(
+                        key: const ValueKey('gym-mode-show-workout-duration'),
+                        title: Text(i18n.gymModeShowWorkoutDuration),
+                        value: gymState.showWorkoutDuration,
+                        onChanged: (value) => gymNotifier.setShowWorkoutDuration(value),
+                      ),
 
                       const Divider(),
                       // Temporary debug aid while the rest-timer notification
@@ -342,6 +348,7 @@ class StartPage extends ConsumerWidget {
         FilledButton(
           child: Text(AppLocalizations.of(context).start),
           onPressed: () {
+            ref.read(gymStateProvider.notifier).startWorkout();
             _controller.nextPage(
               duration: const Duration(milliseconds: 200),
               curve: Curves.bounceIn,
