@@ -105,10 +105,10 @@ class _ActiveWorkoutScreenState extends ConsumerState<ActiveWorkoutScreen> {
           onPressed: () => Navigator.of(context).pop(),
         ),
         title: gymState.showWorkoutDuration
-            ? Column(
+            ? const Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
-                children: const [Text('Workout'), ElapsedWorkoutTimer()],
+                children: [Text('Workout'), ElapsedWorkoutTimer()],
               )
             : const Text('Workout'),
         actions: [
