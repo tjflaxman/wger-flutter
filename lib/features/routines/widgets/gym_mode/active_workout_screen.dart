@@ -267,7 +267,7 @@ class _SetTableHeaderRow extends StatelessWidget {
           Expanded(flex: 3, child: Text('PREVIOUS', style: style, textAlign: TextAlign.center)),
           Expanded(flex: 2, child: Text('KG', style: style, textAlign: TextAlign.center)),
           Expanded(flex: 2, child: Text('REPS', style: style, textAlign: TextAlign.center)),
-          const SizedBox(width: 64),
+          const SizedBox(width: 68),
           const SizedBox(width: 28),
         ],
       ),
@@ -488,7 +488,7 @@ class _SetRowWidgetState extends ConsumerState<SetRowWidget> {
             ),
           ),
           SizedBox(
-            width: 64,
+            width: 68,
             child: Row(
               mainAxisAlignment: MainAxisAlignment.end,
               mainAxisSize: MainAxisSize.min,
@@ -506,6 +506,13 @@ class _SetRowWidgetState extends ConsumerState<SetRowWidget> {
                 Checkbox(
                   key: ValueKey('set-row-checkbox-${row.uuid}'),
                   value: row.logDone,
+                  // Row lays out children at their natural size (unlike a
+                  // bare SizedBox around a lone Checkbox, which just gets a
+                  // tight constraint) -- without shrinking the tap target,
+                  // Checkbox's default ~48px width plus the PR icon
+                  // overflows this column's fixed width.
+                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  visualDensity: VisualDensity.compact,
                   onChanged: (checked) => _onSetComplete(checked, row),
                 ),
               ],

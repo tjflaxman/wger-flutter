@@ -340,7 +340,7 @@ class GymStateNotifier extends _$GymStateNotifier {
     _logger.fine('Removed set row $rowUuid from slot $slotUuid');
   }
 
-  /// Records the id of the [Log] a set row was saved as, so removing the
+  /// Records the id of the Log a set row was saved as, so removing the
   /// row later can also delete the log it created.
   void setLoggedEntryId(String uuid, String id) {
     final updatedSlots = state.exerciseSlots.map((slot) {

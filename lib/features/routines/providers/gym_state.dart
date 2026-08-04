@@ -61,7 +61,7 @@ class SetRowEntry {
   final num? enteredWeight;
   final num? enteredReps;
 
-  /// The id of the persisted [Log] this set was saved as, once completed --
+  /// The id of the persisted Log this set was saved as, once completed --
   /// lets deleting the row also delete the log it created instead of
   /// leaving an orphaned entry behind.
   final String? loggedEntryId;
