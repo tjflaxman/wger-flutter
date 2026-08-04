@@ -61,12 +61,18 @@ class SetRowEntry {
   final num? enteredWeight;
   final num? enteredReps;
 
+  /// The id of the persisted [Log] this set was saved as, once completed --
+  /// lets deleting the row also delete the log it created instead of
+  /// leaving an orphaned entry behind.
+  final String? loggedEntryId;
+
   SetRowEntry({
     required this.setIndex,
     required this.setConfigData,
     this.logDone = false,
     this.enteredWeight,
     this.enteredReps,
+    this.loggedEntryId,
     String? uuid,
   }) : uuid = uuid ?? uuidV4();
 
@@ -77,6 +83,7 @@ class SetRowEntry {
     bool? logDone,
     num? enteredWeight,
     num? enteredReps,
+    String? loggedEntryId,
   }) {
     return SetRowEntry(
       uuid: uuid ?? this.uuid,
@@ -85,6 +92,7 @@ class SetRowEntry {
       logDone: logDone ?? this.logDone,
       enteredWeight: enteredWeight ?? this.enteredWeight,
       enteredReps: enteredReps ?? this.enteredReps,
+      loggedEntryId: loggedEntryId ?? this.loggedEntryId,
     );
   }
 

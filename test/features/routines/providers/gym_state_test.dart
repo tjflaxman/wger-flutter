@@ -141,6 +141,66 @@ void main() {
     });
   });
 
+  group('GymStateNotifier.removeSetFromSlot', () {
+    test('Removes the row and renumbers the remaining sets contiguously', () {
+      // Arrange
+      final slot = notifier.state.exerciseSlots[0];
+      final middleRow = slot.setRows[1];
+
+      // Act
+      notifier.removeSetFromSlot(slot.uuid, middleRow.uuid);
+
+      // Assert
+      final updatedSlot = notifier.state.getSlotByUUID(slot.uuid)!;
+      expect(updatedSlot.setRows.length, 2);
+      expect(updatedSlot.setRows.any((r) => r.uuid == middleRow.uuid), false);
+      expect(
+        updatedSlot.setRows.map((r) => r.setIndex).toList(),
+        [0, 1],
+        reason: 'Remaining sets stay numbered contiguously from 0',
+      );
+    });
+
+    test('Refuses to remove the last remaining set for an exercise', () {
+      // Arrange: remove down to a single set.
+      final slot = notifier.state.exerciseSlots[0];
+      notifier.removeSetFromSlot(slot.uuid, slot.setRows[0].uuid);
+      final oneLeft = notifier.state.getSlotByUUID(slot.uuid)!;
+      expect(oneLeft.setRows.length, 2);
+      notifier.removeSetFromSlot(slot.uuid, oneLeft.setRows[0].uuid);
+      final lastOne = notifier.state.getSlotByUUID(slot.uuid)!;
+      expect(lastOne.setRows.length, 1);
+
+      // Act: try to remove the only remaining set.
+      notifier.removeSetFromSlot(slot.uuid, lastOne.setRows[0].uuid);
+
+      // Assert: refused, still there.
+      final unchanged = notifier.state.getSlotByUUID(slot.uuid)!;
+      expect(unchanged.setRows.length, 1);
+      expect(unchanged.setRows[0].uuid, lastOne.setRows[0].uuid);
+    });
+  });
+
+  group('GymStateNotifier.setLoggedEntryId', () {
+    test('Records the log id on the matching row only', () {
+      // Arrange
+      final slot = notifier.state.exerciseSlots[0];
+      final row = slot.setRows[0];
+      final otherRow = slot.setRows[1];
+
+      // Act
+      notifier.setLoggedEntryId(row.uuid, 'log-123');
+
+      // Assert
+      final updatedSlot = notifier.state.getSlotByUUID(slot.uuid)!;
+      expect(updatedSlot.setRows.firstWhere((r) => r.uuid == row.uuid).loggedEntryId, 'log-123');
+      expect(
+        updatedSlot.setRows.firstWhere((r) => r.uuid == otherRow.uuid).loggedEntryId,
+        null,
+      );
+    });
+  });
+
   group('GymStateNotifier.addExerciseAfterSlot', () {
     test('Inserts a new slot with 4 blank sets right after the given one', () {
       // Arrange

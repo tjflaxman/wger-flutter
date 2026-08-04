@@ -23,6 +23,7 @@ import 'package:collection/collection.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:wger/core/date.dart';
 import 'package:wger/features/exercises/widgets/exercises.dart';
 import 'package:wger/features/routines/models/log.dart';
 import 'package:wger/features/routines/providers/gym_state.dart';
@@ -266,7 +267,8 @@ class _SetTableHeaderRow extends StatelessWidget {
           Expanded(flex: 3, child: Text('PREVIOUS', style: style, textAlign: TextAlign.center)),
           Expanded(flex: 2, child: Text('KG', style: style, textAlign: TextAlign.center)),
           Expanded(flex: 2, child: Text('REPS', style: style, textAlign: TextAlign.center)),
-          const SizedBox(width: 40),
+          const SizedBox(width: 64),
+          const SizedBox(width: 28),
         ],
       ),
     );
@@ -304,6 +306,17 @@ class _SetRowWidgetState extends ConsumerState<SetRowWidget> {
     super.dispose();
   }
 
+  // Keeps gym state in sync with every keystroke, not just at checkbox-commit
+  // time -- otherwise "Add set" (which templates off the last row's *state*
+  // value) can't see weight/reps the user has typed but not yet checked off.
+  void _onFieldChanged(String uuid) {
+    ref.read(gymStateProvider.notifier).updateSetRowValues(
+      uuid,
+      weight: num.tryParse(_weightController.text),
+      reps: num.tryParse(_repsController.text),
+    );
+  }
+
   Future<void> _onSetComplete(bool? checked, SetRowEntry row) async {
     if (checked != true) {
       ref.read(gymStateProvider.notifier).markSetRowAsDone(row.uuid, isDone: false);
@@ -328,6 +341,9 @@ class _SetRowWidgetState extends ConsumerState<SetRowWidget> {
     final notifier = ref.read(gymStateProvider.notifier);
     notifier.updateSetRowValues(row.uuid, weight: weight, reps: reps);
     notifier.markSetRowAsDone(row.uuid, isDone: true);
+    if (log.id != null) {
+      notifier.setLoggedEntryId(row.uuid, log.id!);
+    }
 
     final slot = ref.read(gymStateProvider).getSlotByUUID(widget.slotUuid);
     if (slot == null) {
@@ -355,11 +371,22 @@ class _SetRowWidgetState extends ConsumerState<SetRowWidget> {
     }
   }
 
+  Future<void> _onDelete(SetRowEntry row) async {
+    if (row.loggedEntryId != null) {
+      await ref.read(workoutLogProvider).deleteEntry(row.loggedEntryId!);
+    }
+    if (!mounted) {
+      return;
+    }
+    ref.read(gymStateProvider.notifier).removeSetFromSlot(widget.slotUuid, row.uuid);
+  }
+
   @override
   Widget build(BuildContext context) {
     final gymState = ref.watch(gymStateProvider);
     final row = gymState.getSetRowByUUID(widget.setRowUuid);
-    if (row == null) {
+    final slot = gymState.getSlotByUUID(widget.slotUuid);
+    if (row == null || slot == null) {
       return const SizedBox.shrink();
     }
 
@@ -374,10 +401,55 @@ class _SetRowWidgetState extends ConsumerState<SetRowWidget> {
               distinct: gymState.showDistinctLogs,
             ),
           );
-    final previousLog = pastLogs.value?.firstOrNull;
+
+    // Excludes today's own entries -- pastExerciseLogs is a live stream, so
+    // without this, checking off set 1 makes every row's "previous" column
+    // immediately show what was *just* logged today instead of staying
+    // pinned to last time.
+    final priorLogs = (pastLogs.value ?? [])
+        .where((log) => !log.date.isSameDayAs(clock.now()))
+        .toList();
+
+    // Matched to the same planned set (slotEntryId), not just "the most
+    // recent log of this exercise" -- otherwise "previous" drifts to
+    // whichever set was logged most recently rather than tracking this
+    // specific set's progression across sessions.
+    final previousLog =
+        priorLogs.firstWhereOrNull(
+          (log) => log.slotEntryId == row.setConfigData.slotEntryId,
+        ) ??
+        priorLogs.firstOrNull;
     final previousText = previousLog == null
         ? '-'
         : '${previousLog.weight ?? '-'}×${previousLog.repetitions ?? '-'}';
+
+    // A PR (best weight, reps as tie-breaker at the same weight) against all
+    // prior sessions for this exercise -- computed live off current state
+    // rather than stored, so unchecking the set or editing the value back
+    // down automatically removes the badge instead of needing separate
+    // cleanup logic.
+    num maxPriorWeight = 0;
+    num maxPriorRepsAtMaxWeight = 0;
+    for (final log in priorLogs) {
+      final w = log.weight ?? 0;
+      final r = log.repetitions ?? 0;
+      if (w > maxPriorWeight || (w == maxPriorWeight && r > maxPriorRepsAtMaxWeight)) {
+        maxPriorWeight = w;
+        maxPriorRepsAtMaxWeight = r;
+      }
+    }
+    final currentWeight = row.displayWeight ?? 0;
+    final currentReps = row.displayReps ?? 0;
+    final isPr =
+        row.logDone &&
+        priorLogs.isNotEmpty &&
+        (currentWeight > maxPriorWeight ||
+            (currentWeight == maxPriorWeight && currentReps > maxPriorRepsAtMaxWeight));
+
+    final canDelete =
+        slot.setRows.where((r) => r.setConfigData.exerciseId == row.setConfigData.exerciseId)
+            .length >
+        1;
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: AppSpacing.xs),
@@ -399,6 +471,7 @@ class _SetRowWidgetState extends ConsumerState<SetRowWidget> {
               textAlign: TextAlign.center,
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
               decoration: const InputDecoration(isDense: true, border: OutlineInputBorder()),
+              onChanged: (_) => _onFieldChanged(row.uuid),
             ),
           ),
           const SizedBox(width: AppSpacing.xs),
@@ -411,15 +484,49 @@ class _SetRowWidgetState extends ConsumerState<SetRowWidget> {
               textAlign: TextAlign.center,
               keyboardType: TextInputType.number,
               decoration: const InputDecoration(isDense: true, border: OutlineInputBorder()),
+              onChanged: (_) => _onFieldChanged(row.uuid),
             ),
           ),
           SizedBox(
-            width: 40,
-            child: Checkbox(
-              key: ValueKey('set-row-checkbox-${row.uuid}'),
-              value: row.logDone,
-              onChanged: (checked) => _onSetComplete(checked, row),
+            width: 64,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (isPr)
+                  Padding(
+                    padding: const EdgeInsets.only(right: 4),
+                    child: Icon(
+                      Icons.emoji_events,
+                      key: ValueKey('set-row-pr-${row.uuid}'),
+                      color: Colors.amber.shade700,
+                      size: 18,
+                    ),
+                  ),
+                Checkbox(
+                  key: ValueKey('set-row-checkbox-${row.uuid}'),
+                  value: row.logDone,
+                  onChanged: (checked) => _onSetComplete(checked, row),
+                ),
+              ],
             ),
+          ),
+          SizedBox(
+            width: 28,
+            child: canDelete
+                ? IconButton(
+                    key: ValueKey('set-row-delete-${row.uuid}'),
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(),
+                    icon: Icon(
+                      Icons.delete_outline,
+                      size: 18,
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+                    tooltip: 'Remove set',
+                    onPressed: () => _onDelete(row),
+                  )
+                : null,
           ),
         ],
       ),

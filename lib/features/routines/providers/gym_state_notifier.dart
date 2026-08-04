@@ -296,6 +296,66 @@ class GymStateNotifier extends _$GymStateNotifier {
     _logger.fine('Added a set to slot $slotUuid');
   }
 
+  /// Removes [rowUuid] from [slotUuid] and renumbers the remaining sets of
+  /// that same exercise so "set 1/2/3" stays contiguous. Refuses to remove
+  /// an exercise's last remaining set, since that would leave an empty
+  /// (and unrecoverable from this screen) exercise section.
+  void removeSetFromSlot(String slotUuid, String rowUuid) {
+    final slot = state.getSlotByUUID(slotUuid);
+    if (slot == null) {
+      _logger.warning('No slot found for UUID $slotUuid');
+      return;
+    }
+
+    final targetRow = slot.setRows.firstWhereOrNull((r) => r.uuid == rowUuid);
+    if (targetRow == null) {
+      _logger.warning('No set row found for UUID $rowUuid');
+      return;
+    }
+
+    final sameExerciseCount = slot.setRows
+        .where((r) => r.setConfigData.exerciseId == targetRow.setConfigData.exerciseId)
+        .length;
+    if (sameExerciseCount <= 1) {
+      _logger.info('Refusing to remove the only set left for this exercise');
+      return;
+    }
+
+    var nextIndex = 0;
+    final reindexed = slot.setRows.where((r) => r.uuid != rowUuid).map((r) {
+      if (r.setConfigData.exerciseId != targetRow.setConfigData.exerciseId) {
+        return r;
+      }
+      return r.copyWith(setIndex: nextIndex++);
+    }).toList();
+
+    final updatedSlots = state.exerciseSlots.map((s) {
+      if (s.uuid != slotUuid) {
+        return s;
+      }
+      return s.copyWith(setRows: reindexed);
+    }).toList();
+
+    state = state.copyWith(exerciseSlots: updatedSlots);
+    _logger.fine('Removed set row $rowUuid from slot $slotUuid');
+  }
+
+  /// Records the id of the [Log] a set row was saved as, so removing the
+  /// row later can also delete the log it created.
+  void setLoggedEntryId(String uuid, String id) {
+    final updatedSlots = state.exerciseSlots.map((slot) {
+      final updatedRows = slot.setRows.map((r) {
+        if (r.uuid == uuid) {
+          return r.copyWith(loggedEntryId: id);
+        }
+        return r;
+      }).toList();
+      return slot.copyWith(setRows: updatedRows);
+    }).toList();
+
+    state = state.copyWith(exerciseSlots: updatedSlots);
+  }
+
   void updateSetRowValues(String uuid, {num? weight, num? reps}) {
     final updatedSlots = state.exerciseSlots.map((slot) {
       final updatedRows = slot.setRows.map((r) {
